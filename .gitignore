@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.local
+.DS_Store
+*.sqlite
+*.sqlite3
+*.db
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+.vscode/
+.idea/
+coverage/
+backup/

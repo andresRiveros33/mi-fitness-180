@@ -1,0 +1,276 @@
+// Mi Fitness 180 - Prisma Schema
+// Database: SQLite
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------
+// Profile & 180-day program
+// ---------------------------------------------------------------
+
+model UserProfile {
+  id                Int       @id @default(autoincrement())
+  sex               String    @default("masculino")
+  age               Int       @default(40)
+  heightCm          Float     @default(170)
+  initialWeightKg   Float     @default(73)
+  activityLevel     String    @default("sedentaria")
+  trainingLevel     String    @default("moderado")
+  primaryGoal       String    @default("perder grasa y ganar/mantener músculo")
+  startDate         DateTime  @default(now())
+  daysProgram       Int       @default(180)
+  calorieTarget     Int       @default(1850)
+  proteinTarget     Int       @default(145)
+  fatMinTarget      Int       @default(55)
+  fatMaxTarget      Int       @default(65)
+  carbAuto          Boolean   @default(true)
+  waterTargetMl     Int       @default(2000)
+  stepsTarget       Int       @default(7000)
+  fiberTarget       Int       @default(25)
+  creatineTargetG   Float     @default(5)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------
+// Body tracking
+// ---------------------------------------------------------------
+
+model WeightEntry {
+  id            Int       @id @default(autoincrement())
+  date          DateTime  @unique
+  weightKg      Float
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([date])
+}
+
+model BodyMeasurement {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @unique
+  waistCm       Float?
+  chestCm       Float?
+  armCm         Float?
+  thighCm       Float?
+  neckCm        Float?
+  bodyFatPct    Float?
+  weightKg      Float?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([date])
+}
+
+// ---------------------------------------------------------------
+// Nutrition
+// ---------------------------------------------------------------
+
+model Food {
+  id          Int      @id @default(autoincrement())
+  name        String
+  kcalPer100  Float
+  proteinPer100 Float
+  carbsPer100 Float
+  fatsPer100  Float
+  fiberPer100 Float    @default(0)
+  servingUnit String   @default("g")
+  isBasic     Boolean  @default(false)
+  mealFoods   MealFood[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Meal {
+  id          Int      @id @default(autoincrement())
+  name        String   // Desayuno, Almuerzo, Cena, Merienda
+  date        DateTime
+  userId      Int
+  entries     MealFood[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date, userId])
+}
+
+model MealFood {
+  id        Int    @id @default(autoincrement())
+  mealId    Int
+  foodId    Int
+  grams     Float
+  food      Food   @relation(fields: [foodId], references: [id])
+  meal      Meal   @relation(fields: [mealId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NutritionEntry {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @unique
+  calories    Float    @default(0)
+  proteinG    Float    @default(0)
+  carbsG      Float    @default(0)
+  fatsG       Float    @default(0)
+  fiberG      Float    @default(0)
+  waterMl     Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+}
+
+// ---------------------------------------------------------------
+// Supplements
+// ---------------------------------------------------------------
+
+model Supplement {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @unique
+  wheyProteinG Float   @default(0)
+  caloriesFromWhey Float @default(0)
+  creatineG   Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+}
+
+// ---------------------------------------------------------------
+// Daily activity
+// ---------------------------------------------------------------
+
+model DailyActivity {
+  id             Int      @id @default(autoincrement())
+  date           DateTime @unique
+  steps          Int      @default(0)
+  activeCalories Float    @default(0)
+  walkingMinutes Int      @default(0)
+  cardioType     String?
+  cardioMinutes  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([date])
+}
+
+// ---------------------------------------------------------------
+// Workout program & training
+// ---------------------------------------------------------------
+
+model Exercise {
+  id            Int                 @id @default(autoincrement())
+  name          String
+  category      String   // superior, piernas, core, etc
+  isProgram     Boolean  @default(false)
+  workoutExercises WorkoutExercise[]
+  personalRecords  PersonalRecord[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([name, category])
+}
+
+model Workout {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @unique
+  name        String   // "Tren superior A", etc.
+  durationMin Int
+  painRating  Int      @default(0)
+  rpe         Int      @default(0)
+  notes       String?
+  exercises   WorkoutExercise[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+}
+
+model WorkoutExercise {
+  id           Int          @id @default(autoincrement())
+  workoutId    Int
+  exerciseId   Int
+  order        Int          @default(1)
+  exercise     Exercise     @relation(fields: [exerciseId], references: [id])
+  workout      Workout      @relation(fields: [workoutId], references: [id])
+  sets         WorkoutSet[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([workoutId])
+}
+
+model WorkoutSet {
+  id            Int            @id @default(autoincrement())
+  workoutExerciseId Int
+  setNumber     Int            @default(1)
+  weightKg      Float
+  reps          Int
+  rir           Int
+  restSec       Int            @default(60)
+  notes         String?
+  workoutExercise WorkoutExercise @relation(fields: [workoutExerciseId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([workoutExerciseId])
+}
+
+// ---------------------------------------------------------------
+// Progress photos & monthly goals
+// ---------------------------------------------------------------
+
+model ProgressPhoto {
+  id          Int      @id @default(autoincrement())
+  date        DateTime
+  photoType   String   // Frente, Perfil, Espalda
+  dataUrl     String   // base64 data
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+  @@index([photoType])
+}
+
+model MonthlyGoal {
+  id          Int      @id @default(autoincrement())
+  month       Int      @default(1) // 1-6
+  goals       String   // JSON array or text lines
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------
+// Adaptive system & achievements
+// ---------------------------------------------------------------
+
+model Achievement {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  category    String
+  exerciseId  Int?
+  createdAt   DateTime @default(now())
+}
+
+model PersonalRecord {
+  id          Int      @id @default(autoincrement())
+  exerciseId  Int
+  recordType  String   // maxWeight, maxReps, maxVolume
+  value       Float
+  date        DateTime
+  exercise    Exercise @relation(fields: [exerciseId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@unique([exerciseId, recordType])
+  @@index([exerciseId])
+}
