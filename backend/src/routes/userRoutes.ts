@@ -40,9 +40,13 @@ router.put('/profile', async (req, res) => {
     if (!profile) {
       profile = await prisma.userProfile.create({ data: {} as never });
     }
+    const updateData: Record<string, unknown> = { ...data };
+    if (data.startDate) {
+      updateData.startDate = new Date(data.startDate);
+    }
     const updated = await prisma.userProfile.update({
       where: { id: profile!.id },
-      data,
+      data: updateData,
     });
     res.json(updated);
   } catch (e) {
