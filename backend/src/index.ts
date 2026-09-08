@@ -12,6 +12,7 @@ import photoRoutes from './routes/photoRoutes.js';
 import goalRoutes from './routes/goalRoutes.js';
 import statsRoutes from './routes/statsRoutes.js';
 import backupRoutes from './routes/backupRoutes.js';
+import { execSync } from 'child_process';
 
 export const prisma = new PrismaClient();
 
@@ -51,6 +52,13 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 const PORT = process.env.PORT || 4000;
+
+try {
+  execSync('npx prisma db push', { stdio: 'inherit' });
+  console.log('Base de datos sincronizada correctamente');
+} catch (error) {
+  console.error('Error al sincronizar la base de datos:', error);
+}
 
 app.listen(PORT, () => {
   console.log(`Mi Fitness 180 API escuchando en http://localhost:${PORT}`);
