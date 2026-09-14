@@ -13,6 +13,7 @@ import {
   Search,
 } from 'lucide-react';
 import { api, formatNumber, todayISO } from '../lib/api';
+import basicIngredients from '../data/basicIngredients.json';
 import type { ExternalFoodSearchResult, Food, Meal, NutritionEntry, UserProfile } from '../types';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
@@ -22,6 +23,9 @@ import { PageHeader } from '../components/AppLayout';
 import { useToast } from '../components/Toast';
 
 const MEAL_NAMES = ['Desayuno', 'Almuerzo', 'Cena', 'Merienda'] as const;
+
+type BasicIngredient = (typeof basicIngredients)[number];
+type SearchTab = 'local' | 'web';
 
 export default function NutritionPage() {
   const { show } = useToast();
@@ -35,10 +39,20 @@ export default function NutritionPage() {
   const [selectedFood, setSelectedFood] = useState('');
   const [grams, setGrams] = useState('100');
   const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<SearchTab>('local');
   const [externalResults, setExternalResults] = useState<ExternalFoodSearchResult[]>([]);
   const [searchingExternal, setSearchingExternal] = useState(false);
   const [searchError, setSearchError] = useState('');
   const searchSeq = useRef(0);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customForm, setCustomForm] = useState({
+    name: '',
+    kcal: '',
+    protein: '',
+    carbs: '',
+    fats: '',
+    fiber: '',
+  });
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestCal, setSuggestCal] = useState('600');
   const [suggestProt, setSuggestProt] = useState('45');
@@ -74,7 +88,7 @@ export default function NutritionPage() {
   useEffect(() => {
     const q = search.trim();
     const seq = ++searchSeq.current;
-    if (q.length < 2) {
+    if (tab !== 'web' || q.length < 2) {
       setExternalResults([]);
       setSearchingExternal(false);
       setSearchError('');
@@ -95,7 +109,7 @@ export default function NutritionPage() {
       }
     }, 350);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, tab]);
 
   const selectExternalFood = async (r: ExternalFoodSearchResult) => {
     const existing = foods.find((f) => f.name.toLowerCase() === r.name.toLowerCase());
@@ -116,6 +130,55 @@ export default function NutritionPage() {
       setFoods((prev) => [food, ...prev]);
       setSelectedFood(String(food.id));
       show(`"${food.name}" añadido a tu base de alimentos`);
+    } catch (e) {
+      show((e as Error).message, 'error');
+    }
+  };
+
+  const selectBasic = async (row: { ingredient: BasicIngredient; food: Food | null }) => {
+    if (row.food) {
+      setSelectedFood(String(row.food.id));
+      return;
+    }
+    try {
+      const food = await api.post<Food>('/nutrition/foods', {
+        name: row.ingredient.name,
+        kcalPer100: row.ingredient.kcal,
+        proteinPer100: row.ingredient.prot,
+        carbsPer100: row.ingredient.carbs,
+        fatsPer100: row.ingredient.fat,
+        fiberPer100: row.ingredient.fiber,
+        servingUnit: 'g',
+      });
+      setFoods((prev) => [food, ...prev]);
+      setSelectedFood(String(food.id));
+      show(`"${food.name}" añadido a tu base de alimentos`);
+    } catch (e) {
+      show((e as Error).message, 'error');
+    }
+  };
+
+  const createCustomFood = async () => {
+    const name = customForm.name.trim();
+    if (!name) {
+      show('Escribe un nombre', 'error');
+      return;
+    }
+    try {
+      const food = await api.post<Food>('/nutrition/foods', {
+        name,
+        kcalPer100: Number(customForm.kcal) || 0,
+        proteinPer100: Number(customForm.protein) || 0,
+        carbsPer100: Number(customForm.carbs) || 0,
+        fatsPer100: Number(customForm.fats) || 0,
+        fiberPer100: Number(customForm.fiber) || 0,
+        servingUnit: 'g',
+      });
+      setFoods((prev) => [food, ...prev]);
+      setSelectedFood(String(food.id));
+      setCustomOpen(false);
+      setCustomForm({ name: '', kcal: '', protein: '', carbs: '', fats: '', fiber: '' });
+      show(`"${food.name}" creado`);
     } catch (e) {
       show((e as Error).message, 'error');
     }
@@ -195,7 +258,18 @@ export default function NutritionPage() {
     }
   };
 
-  const filteredFoods = foods.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()));
+  const q = search.trim().toLowerCase();
+  const basicResults = basicIngredients
+    .filter((b) => b.name.toLowerCase().includes(q))
+    .map((ingredient) => ({
+      ingredient,
+      food: foods.find((f) => f.name.toLowerCase() === ingredient.name.toLowerCase()) ?? null,
+    }));
+  const basicFoodIds = new Set(basicResults.map((r) => r.food?.id).filter(Boolean));
+  const otherResults = foods
+    .filter((f) => f.name.toLowerCase().includes(q) && !basicFoodIds.has(f.id))
+    .sort((a, b) => (a.isBasic === b.isBasic ? a.name.localeCompare(b.name) : a.isBasic ? -1 : 1));
+  const query = search.trim();
 
   const toggleSuggestFood = (id: number) => {
     setSuggestFoods((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -375,35 +449,113 @@ export default function NutritionPage() {
               autoFocus
             />
           </div>
+          <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl mb-2">
+            {(['local', 'web'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`rounded-lg py-2 text-sm font-semibold transition-colors touch-action-manipulation ${
+                  tab === t
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                {t === 'local' ? 'Ingredientes' : 'Marcas web'}
+              </button>
+            ))}
+          </div>
+
           <div className="max-h-72 overflow-y-auto space-y-1 mb-3">
-            {filteredFoods.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1">Tu base de alimentos</p>
-                {filteredFoods.map((f) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setSelectedFood(String(f.id))}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors touch-action-manipulation ${
-                      selectedFood === String(f.id)
-                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700'
-                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 border border-transparent'
-                    }`}
-                  >
-                    <p className="font-medium">{f.name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Energía {formatNumber(f.kcalPer100)} kcal · Proteína {formatNumber(f.proteinPer100, 1)}g · Grasa {formatNumber(f.fatsPer100, 1)}g · Carbohidratos {formatNumber(f.carbsPer100, 1)}g /100g
+            {tab === 'local' && (
+              <>
+                {basicResults.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1">
+                      Ingredientes Básicos
                     </p>
-                  </button>
-                ))}
-              </div>
+                    {basicResults.map((row, i) => (
+                      <button
+                        key={`basic-${i}`}
+                        onClick={() => selectBasic(row)}
+                        className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors touch-action-manipulation ${
+                          selectedFood === String(row.food?.id ?? `ing-${i}`)
+                            ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700'
+                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 border border-transparent'
+                        }`}
+                      >
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
+                            Básico
+                          </span>
+                          <span className="truncate">{row.ingredient.name}</span>
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Energía {formatNumber(row.ingredient.kcal)} kcal · Proteína {formatNumber(row.ingredient.prot, 1)}g · Grasa {formatNumber(row.ingredient.fat, 1)}g · Carbohidratos {formatNumber(row.ingredient.carbs, 1)}g /100g
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {otherResults.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1 pt-2">
+                      Tus alimentos
+                    </p>
+                    {otherResults.map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setSelectedFood(String(f.id))}
+                        className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors touch-action-manipulation ${
+                          selectedFood === String(f.id)
+                            ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700'
+                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 border border-transparent'
+                        }`}
+                      >
+                        <p className="font-medium truncate">{f.name}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Energía {formatNumber(f.kcalPer100)} kcal · Proteína {formatNumber(f.proteinPer100, 1)}g · Grasa {formatNumber(f.fatsPer100, 1)}g · Carbohidratos {formatNumber(f.carbsPer100, 1)}g /100g
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {query.length >= 2 && basicResults.length === 0 && otherResults.length === 0 ? (
+                  <div className="text-center py-4 space-y-2">
+                    <p className="text-sm text-slate-500">No hay resultados locales para "{query}"</p>
+                    <Button variant="secondary" onClick={() => setCustomOpen(true)} className="w-full">
+                      <Plus className="w-4 h-4" /> Crear alimento manual
+                    </Button>
+                    <Button variant="ghost" onClick={() => setTab('web')} className="w-full">
+                      Buscar en marcas web
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="pt-1">
+                    <button
+                      onClick={() => setCustomOpen(true)}
+                      className="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 active:bg-blue-100 dark:active:bg-blue-900/40 transition-colors touch-action-manipulation"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Plus className="w-4 h-4" /> Crear alimento manual
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
-            {search.trim().length >= 2 && (
+            {tab === 'web' && (
               <>
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1 pt-2">
-                  Resultados web · Open Food Facts
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1">
+                  Buscar en marcas web · Open Food Facts
                 </p>
-                {searchingExternal ? (
+                {query.length < 2 ? (
+                  <p className="text-center text-sm text-slate-500 py-4">
+                    Escribe al menos 2 caracteres para buscar en marcas web
+                  </p>
+                ) : searchingExternal ? (
                   <p className="text-center text-sm text-slate-500 py-3">Buscando en Open Food Facts…</p>
                 ) : (
                   <>
@@ -431,10 +583,6 @@ export default function NutritionPage() {
                 )}
               </>
             )}
-
-            {filteredFoods.length === 0 && search.trim().length < 2 && !searchingExternal && (
-              <p className="text-center text-sm text-slate-500 py-4">No se encontraron alimentos en tu base</p>
-            )}
           </div>
           <div className="grid grid-cols-2 gap-3 mb-4">
             <Field label="Gramos">
@@ -446,6 +594,76 @@ export default function NutritionPage() {
           </div>
           <Button onClick={() => submitMeal(modal.meal)} disabled={!selectedFood} className="w-full py-4">
             Guardar en {modal.meal}
+          </Button>
+        </Modal>
+      )}
+
+      {/* Custom food modal - bottom sheet */}
+      {customOpen && (
+        <Modal onClose={() => setCustomOpen(false)}>
+          <h2 className="font-bold text-lg mb-1">Crear alimento manual</h2>
+          <p className="text-xs text-slate-500 mb-3">Valores por 100 g</p>
+          <div className="space-y-3 mb-4">
+            <Field label="Nombre">
+              <Input
+                autoFocus
+                placeholder="Ej. Pechuga de pavo"
+                value={customForm.name}
+                onChange={(e) => setCustomForm({ ...customForm, name: e.target.value })}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Calorías /100g">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={customForm.kcal}
+                  onChange={(e) => setCustomForm({ ...customForm, kcal: e.target.value })}
+                />
+              </Field>
+              <Field label="Proteína /100g">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={customForm.protein}
+                  onChange={(e) => setCustomForm({ ...customForm, protein: e.target.value })}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Carbohidratos /100g">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={customForm.carbs}
+                  onChange={(e) => setCustomForm({ ...customForm, carbs: e.target.value })}
+                />
+              </Field>
+              <Field label="Grasas /100g">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={customForm.fats}
+                  onChange={(e) => setCustomForm({ ...customForm, fats: e.target.value })}
+                />
+              </Field>
+            </div>
+            <Field label="Fibra /100g">
+              <Input
+                type="number"
+                inputMode="decimal"
+                placeholder="0"
+                value={customForm.fiber}
+                onChange={(e) => setCustomForm({ ...customForm, fiber: e.target.value })}
+              />
+            </Field>
+          </div>
+          <Button onClick={createCustomFood} disabled={!customForm.name.trim()} className="w-full py-4">
+            Crear alimento
           </Button>
         </Modal>
       )}
