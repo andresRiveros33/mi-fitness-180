@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Flame,
   Beef,
@@ -13,7 +13,7 @@ import {
   Search,
 } from 'lucide-react';
 import { api, formatNumber, todayISO } from '../lib/api';
-import type { Food, Meal, NutritionEntry, UserProfile } from '../types';
+import type { ExternalFoodSearchResult, Food, Meal, NutritionEntry, UserProfile } from '../types';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
 import { Field, Input, Select } from '../components/Input';
@@ -35,6 +35,10 @@ export default function NutritionPage() {
   const [selectedFood, setSelectedFood] = useState('');
   const [grams, setGrams] = useState('100');
   const [search, setSearch] = useState('');
+  const [externalResults, setExternalResults] = useState<ExternalFoodSearchResult[]>([]);
+  const [searchingExternal, setSearchingExternal] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const searchSeq = useRef(0);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestCal, setSuggestCal] = useState('600');
   const [suggestProt, setSuggestProt] = useState('45');
@@ -66,6 +70,56 @@ export default function NutritionPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const q = search.trim();
+    const seq = ++searchSeq.current;
+    if (q.length < 2) {
+      setExternalResults([]);
+      setSearchingExternal(false);
+      setSearchError('');
+      return;
+    }
+    setSearchingExternal(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await api.get<ExternalFoodSearchResult[]>('/nutrition/search', { q });
+        if (searchSeq.current === seq) {
+          setExternalResults(results);
+          setSearchError('');
+        }
+      } catch (e) {
+        if (searchSeq.current === seq) setSearchError((e as Error).message);
+      } finally {
+        if (searchSeq.current === seq) setSearchingExternal(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const selectExternalFood = async (r: ExternalFoodSearchResult) => {
+    const existing = foods.find((f) => f.name.toLowerCase() === r.name.toLowerCase());
+    if (existing) {
+      setSelectedFood(String(existing.id));
+      return;
+    }
+    try {
+      const food = await api.post<Food>('/nutrition/foods', {
+        name: r.name,
+        kcalPer100: r.kcalPer100,
+        proteinPer100: r.proteinPer100,
+        carbsPer100: r.carbsPer100,
+        fatsPer100: r.fatsPer100,
+        fiberPer100: r.fiberPer100,
+        servingUnit: 'g',
+      });
+      setFoods((prev) => [food, ...prev]);
+      setSelectedFood(String(food.id));
+      show(`"${food.name}" añadido a tu base de alimentos`);
+    } catch (e) {
+      show((e as Error).message, 'error');
+    }
+  };
 
   const totals = useMemo(() => {
     return meals.reduce(
@@ -321,26 +375,65 @@ export default function NutritionPage() {
               autoFocus
             />
           </div>
-          <div className="max-h-60 overflow-y-auto space-y-1 mb-3">
-            {filteredFoods.length === 0 ? (
-              <p className="text-center text-sm text-slate-500 py-4">No se encontraron alimentos</p>
-            ) : (
-              filteredFoods.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setSelectedFood(String(f.id))}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors touch-action-manipulation ${
-                    selectedFood === String(f.id)
-                      ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700'
-                      : 'hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 border border-transparent'
-                  }`}
-                >
-                  <p className="font-medium">{f.name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {formatNumber(f.kcalPer100)} kcal · {formatNumber(f.proteinPer100, 1)}g prot /100g
-                  </p>
-                </button>
-              ))
+          <div className="max-h-72 overflow-y-auto space-y-1 mb-3">
+            {filteredFoods.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1">Tu base de alimentos</p>
+                {filteredFoods.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setSelectedFood(String(f.id))}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors touch-action-manipulation ${
+                      selectedFood === String(f.id)
+                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700'
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 border border-transparent'
+                    }`}
+                  >
+                    <p className="font-medium">{f.name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {formatNumber(f.kcalPer100)} kcal · {formatNumber(f.proteinPer100, 1)}g prot /100g
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {search.trim().length >= 2 && (
+              <>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1 pt-2">
+                  Resultados web · Open Food Facts
+                </p>
+                {searchingExternal ? (
+                  <p className="text-center text-sm text-slate-500 py-3">Buscando en Open Food Facts…</p>
+                ) : (
+                  <>
+                    {externalResults.map((r) => (
+                      <button
+                        key={`ext-${r.code || r.name}`}
+                        onClick={() => selectExternalFood(r)}
+                        className="w-full text-left px-4 py-3 rounded-xl text-sm transition-colors touch-action-manipulation hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 border border-transparent"
+                      >
+                        <p className="flex items-center gap-1.5 font-medium">
+                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-900 text-sky-700 dark:text-sky-300">Web</span>
+                          <span className="truncate">{r.name}</span>
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {formatNumber(r.kcalPer100)} kcal · P {formatNumber(r.proteinPer100, 1)} · C {formatNumber(r.carbsPer100, 1)} · G {formatNumber(r.fatsPer100, 1)} /100g
+                          {r.servingGrams ? ` · ración ${formatNumber(r.servingGrams)}g ${r.kcalPerServing ? `(${formatNumber(r.kcalPerServing)} kcal)` : ''}` : ''}
+                        </p>
+                      </button>
+                    ))}
+                    {externalResults.length === 0 && !searchError && (
+                      <p className="text-center text-sm text-slate-500 py-3">Sin resultados en Open Food Facts</p>
+                    )}
+                    {searchError && <p className="text-center text-xs text-amber-600 py-3">{searchError}</p>}
+                  </>
+                )}
+              </>
+            )}
+
+            {filteredFoods.length === 0 && search.trim().length < 2 && !searchingExternal && (
+              <p className="text-center text-sm text-slate-500 py-4">No se encontraron alimentos en tu base</p>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3 mb-4">

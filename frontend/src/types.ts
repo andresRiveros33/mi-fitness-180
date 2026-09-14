@@ -85,6 +85,23 @@ export interface Food {
   isBasic: boolean;
 }
 
+export interface ExternalFoodSearchResult {
+  source: 'openfoodfacts';
+  code: string;
+  name: string;
+  kcalPer100: number;
+  proteinPer100: number;
+  carbsPer100: number;
+  fatsPer100: number;
+  fiberPer100: number;
+  servingGrams: number | null;
+  kcalPerServing: number | null;
+  proteinPerServing: number | null;
+  carbsPerServing: number | null;
+  fatsPerServing: number | null;
+  imageUrl: string | null;
+}
+
 export interface NutritionEntry {
   id: number;
   date: string;

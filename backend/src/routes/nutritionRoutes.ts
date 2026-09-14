@@ -8,8 +8,22 @@ import {
   dateQuerySchema,
 } from '../lib/validations.js';
 import { startOfDay, macroFromFood } from '../lib/calculations.js';
+import { searchOpenFoodFacts } from '../lib/openFoodFacts.js';
 
 const router = Router();
+
+// ---------- External food search (Open Food Facts) ----------
+
+router.get('/search', async (req, res) => {
+  try {
+    const q = String(req.query.q ?? '').trim();
+    if (q.length < 2) return res.json([]);
+    const results = await searchOpenFoodFacts(q);
+    res.json(results);
+  } catch (e) {
+    res.status(502).json({ error: `No se pudo consultar Open Food Facts: ${(e as Error).message}` });
+  }
+});
 
 // ---------- Nutrition entry (daily totals) ----------
 
