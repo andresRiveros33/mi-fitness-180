@@ -155,6 +155,24 @@ async function main() {
   if (legacyAvena) {
     await prisma.food.update({ where: { id: legacyAvena.id }, data: { name: 'Avena en hojuelas' } });
   }
+  const legacyCafe = await prisma.food.findFirst({ where: { name: 'Café (sin azúcar)', isBasic: true } });
+  if (legacyCafe) {
+    await prisma.food.update({ where: { id: legacyCafe.id }, data: { name: 'Tinto / Café negro' } });
+  }
+  const catCafe = basicFoods.find((f) => f.name === 'Tinto / Café negro');
+  const tinto = await prisma.food.findFirst({ where: { name: 'Tinto / Café negro', isBasic: true } });
+  if (tinto && catCafe) {
+    await prisma.food.update({
+      where: { id: tinto.id },
+      data: {
+        kcalPer100: catCafe.kcal,
+        proteinPer100: catCafe.prot,
+        carbsPer100: catCafe.carbs,
+        fatsPer100: catCafe.fat,
+        fiberPer100: catCafe.fiber,
+      },
+    });
+  }
   let createdFoods = 0;
   for (const f of basicFoods) {
     const existingFood = await prisma.food.findFirst({ where: { name: f.name } });

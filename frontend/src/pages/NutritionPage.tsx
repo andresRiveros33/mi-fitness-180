@@ -13,7 +13,7 @@ import {
   Search,
 } from 'lucide-react';
 import { api, formatNumber, todayISO } from '../lib/api';
-import basicIngredients from '../data/basicIngredients.json';
+import basicIngredientsFromFile from '../data/basicIngredients.json';
 import type { ExternalFoodSearchResult, Food, Meal, NutritionEntry, UserProfile } from '../types';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
@@ -24,8 +24,46 @@ import { useToast } from '../components/Toast';
 
 const MEAL_NAMES = ['Desayuno', 'Almuerzo', 'Cena', 'Merienda'] as const;
 
-type BasicIngredient = (typeof basicIngredients)[number];
+type ServingUnit = 'g' | 'ml' | 'u';
+type PortionMode = 'measure' | 'grams';
+
+interface BasicServing {
+  unit: ServingUnit;
+  amount: number;
+  grams: number;
+  label: string;
+}
+
+interface BasicIngredient {
+  name: string;
+  category?: string;
+  kcal: number;
+  prot: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  serving?: BasicServing;
+}
+
+const basicIngredients = basicIngredientsFromFile as BasicIngredient[];
 type SearchTab = 'local' | 'web';
+
+const normalizeText = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+const CATEGORY_ORDER = [
+  'Bebidas',
+  'Desayunos',
+  'Proteínas',
+  'Cereales y legumbres',
+  'Tubérculos y plátano',
+  'Lácteos y quesos',
+  'Frutas',
+  'Verduras',
+  'Grasas y frutos secos',
+  'Comidas típicas',
+  'Snacks y postres',
+  'Endulzantes',
+];
 
 export default function NutritionPage() {
   const { show } = useToast();
@@ -37,7 +75,8 @@ export default function NutritionPage() {
   const [waterQuickAdd, setWaterQuickAdd] = useState(false);
   const [modal, setModal] = useState<{ meal: string; open: boolean }>({ meal: '', open: false });
   const [selectedFood, setSelectedFood] = useState('');
-  const [grams, setGrams] = useState('100');
+  const [portionMode, setPortionMode] = useState<PortionMode>('grams');
+  const [portionQty, setPortionQty] = useState('100');
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<SearchTab>('local');
   const [externalResults, setExternalResults] = useState<ExternalFoodSearchResult[]>([]);
@@ -110,6 +149,21 @@ export default function NutritionPage() {
     }, 350);
     return () => clearTimeout(timer);
   }, [search, tab]);
+
+  useEffect(() => {
+    const food = foods.find((f) => String(f.id) === selectedFood);
+    const ingredient = food
+      ? basicIngredients.find((b) => normalizeText(b.name) === normalizeText(food.name)) ?? null
+      : null;
+    if (ingredient?.serving) {
+      setPortionMode('measure');
+      setPortionQty(String(ingredient.serving.amount));
+    } else {
+      setPortionMode('grams');
+      setPortionQty('100');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFood]);
 
   const selectExternalFood = async (r: ExternalFoodSearchResult) => {
     const existing = foods.find((f) => f.name.toLowerCase() === r.name.toLowerCase());
@@ -209,18 +263,59 @@ export default function NutritionPage() {
   const fiberTarget = profile?.fiberTarget ?? 25;
   const carbTarget = Math.max(0, Math.round((calTarget - totals.protein * 4 - totals.fats * 9) / 4));
 
+  const selectedFoodObj = foods.find((f) => String(f.id) === selectedFood) ?? null;
+  const selectedIngredient = selectedFoodObj
+    ? basicIngredients.find((b) => normalizeText(b.name) === normalizeText(selectedFoodObj!.name)) ?? null
+    : null;
+  const serving = selectedIngredient?.serving ?? null;
+  const portionQtyNum = Number(portionQty) || 0;
+  const finalGrams =
+    portionMode === 'measure' && serving ? portionQtyNum * (serving.grams / serving.amount) : portionQtyNum;
+  const selectedPreview = (() => {
+    if (!finalGrams) return null;
+    if (selectedFoodObj) {
+      const factor = finalGrams / 100;
+      return {
+        name: selectedFoodObj.name,
+        kcal: selectedFoodObj.kcalPer100 * factor,
+        protein: selectedFoodObj.proteinPer100 * factor,
+        carbs: selectedFoodObj.carbsPer100 * factor,
+        fats: selectedFoodObj.fatsPer100 * factor,
+      };
+    }
+    if (selectedIngredient) {
+      const factor = finalGrams / 100;
+      return {
+        name: selectedIngredient.name,
+        kcal: selectedIngredient.kcal * factor,
+        protein: selectedIngredient.prot * factor,
+        carbs: selectedIngredient.carbs * factor,
+        fats: selectedIngredient.fat * factor,
+      };
+    }
+    return null;
+  })();
+  const servingUnitLabel = serving
+    ? serving.unit === 'ml'
+      ? 'ml'
+      : serving.unit === 'u'
+        ? 'unidad(es)'
+        : 'g'
+    : 'g';
+
   const submitMeal = async (mealName: string) => {
     if (!selectedFood) return;
     try {
       await api.post('/nutrition/meals', {
         date: today,
         name: mealName,
-        foods: [{ foodId: Number(selectedFood), grams: Number(grams) || 0 }],
+        foods: [{ foodId: Number(selectedFood), grams: finalGrams }],
       });
       await api.post('/nutrition/recompute', { from: today });
       setModal({ meal: '', open: false });
       setSelectedFood('');
-      setGrams('100');
+      setPortionMode('grams');
+      setPortionQty('100');
       show(`${mealName} actualizado`);
       load();
     } catch (e) {
@@ -258,18 +353,33 @@ export default function NutritionPage() {
     }
   };
 
-  const q = search.trim().toLowerCase();
+  const q = normalizeText(search.trim());
   const basicResults = basicIngredients
-    .filter((b) => b.name.toLowerCase().includes(q))
+    .filter((b) => normalizeText(b.name).includes(q))
     .map((ingredient) => ({
       ingredient,
-      food: foods.find((f) => f.name.toLowerCase() === ingredient.name.toLowerCase()) ?? null,
+      food: foods.find((f) => normalizeText(f.name) === normalizeText(ingredient.name)) ?? null,
     }));
   const basicFoodIds = new Set(basicResults.map((r) => r.food?.id).filter(Boolean));
   const otherResults = foods
-    .filter((f) => f.name.toLowerCase().includes(q) && !basicFoodIds.has(f.id))
+    .filter((f) => normalizeText(f.name).includes(q) && !basicFoodIds.has(f.id))
     .sort((a, b) => (a.isBasic === b.isBasic ? a.name.localeCompare(b.name) : a.isBasic ? -1 : 1));
   const query = search.trim();
+  const categoryRank = new Map(CATEGORY_ORDER.map((c, i) => [c, i]));
+  const basicGroups = Array.from(
+    basicResults.reduce((acc, row) => {
+      const c = row.ingredient.category ?? 'Otros';
+      if (!acc.has(c)) acc.set(c, []);
+      acc.get(c)!.push(row);
+      return acc;
+    }, new Map<string, typeof basicResults>())
+  )
+    .map(([category, rows]) => ({ category, rows }))
+    .sort(
+      (a, b) =>
+        (categoryRank.get(a.category) ?? 99) - (categoryRank.get(b.category) ?? 99) ||
+        a.category.localeCompare(b.category)
+    );
 
   const toggleSuggestFood = (id: number) => {
     setSuggestFoods((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -470,29 +580,40 @@ export default function NutritionPage() {
               <>
                 {basicResults.length > 0 && (
                   <div className="space-y-1">
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1">
-                      Ingredientes Básicos
-                    </p>
-                    {basicResults.map((row, i) => (
-                      <button
-                        key={`basic-${i}`}
-                        onClick={() => selectBasic(row)}
-                        className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors touch-action-manipulation ${
-                          selectedFood === String(row.food?.id ?? `ing-${i}`)
-                            ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700'
-                            : 'hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 border border-transparent'
-                        }`}
-                      >
-                        <p className="flex items-center gap-1.5 font-medium">
-                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
-                            Básico
-                          </span>
-                          <span className="truncate">{row.ingredient.name}</span>
+                    {basicGroups.map(({ category, rows }) => (
+                      <div key={category} className="space-y-1">
+                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-1 pt-1">
+                          {category}
                         </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Energía {formatNumber(row.ingredient.kcal)} kcal · Proteína {formatNumber(row.ingredient.prot, 1)}g · Grasa {formatNumber(row.ingredient.fat, 1)}g · Carbohidratos {formatNumber(row.ingredient.carbs, 1)}g /100g
-                        </p>
-                      </button>
+                        {rows.map((row, i) => (
+                          <button
+                            key={`basic-${category}-${i}`}
+                            onClick={() => selectBasic(row)}
+                            className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors touch-action-manipulation ${
+                              selectedFood === String(row.food?.id ?? `ing-${i}`)
+                                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 border border-blue-300 dark:border-blue-700'
+                                : 'hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 border border-transparent'
+                            }`}
+                          >
+                            <p className="flex items-center gap-1.5 font-medium">
+                              <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
+                                Básico
+                              </span>
+                              <span className="truncate">
+                                {row.ingredient.name}
+                                {row.ingredient.serving && (
+                                  <span className="text-[10px] font-normal text-slate-400 ml-1">
+                                    · {row.ingredient.serving.label}
+                                  </span>
+                                )}
+                              </span>
+                            </p>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Energía {formatNumber(row.ingredient.kcal)} kcal · Proteína {formatNumber(row.ingredient.prot, 1)}g · Grasa {formatNumber(row.ingredient.fat, 1)}g · Carbohidratos {formatNumber(row.ingredient.carbs, 1)}g /100g
+                            </p>
+                          </button>
+                        ))}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -584,13 +705,80 @@ export default function NutritionPage() {
               </>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <Field label="Gramos">
-              <Input type="number" inputMode="decimal" value={grams} onChange={(e) => setGrams(e.target.value)} />
-            </Field>
+          <div className="space-y-3 mb-4">
             <Field label="Seleccionado">
-              <Input value={selectedFood ? foods.find((f) => f.id === Number(selectedFood))?.name ?? '' : ''} disabled />
+              <Input value={selectedPreview?.name ?? ''} disabled />
             </Field>
+
+            {serving ? (
+              <>
+                <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                  {(
+                    [
+                      { key: 'measure', label: serving.label },
+                      { key: 'grams', label: 'Gramos' },
+                    ] as const
+                  ).map((m) => (
+                    <button
+                      key={m.key}
+                      onClick={() => {
+                        setPortionMode(m.key);
+                        setPortionQty(m.key === 'measure' ? String(serving.amount) : '100');
+                      }}
+                      className={`rounded-lg py-2 px-1 text-sm font-semibold transition-colors touch-action-manipulation truncate ${
+                        portionMode === m.key
+                          ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {m.label}
+                      {m.key === 'measure' && serving.unit !== 'g' && (
+                        <span className="block text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                          {serving.unit === 'ml' ? 'taza / vaso' : 'unidades'}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-3 items-end">
+                  <Field label={portionMode === 'measure' ? `Medida (${servingUnitLabel})` : 'Gramos'}>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={portionQty}
+                      onChange={(e) => setPortionQty(e.target.value)}
+                      placeholder={portionMode === 'measure' ? String(serving.amount) : '100'}
+                    />
+                  </Field>
+                  <PortionPreview
+                    grams={finalGrams}
+                    kcal={selectedPreview?.kcal ?? 0}
+                    protein={selectedPreview?.protein ?? 0}
+                    carbs={selectedPreview?.carbs ?? 0}
+                    fats={selectedPreview?.fats ?? 0}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 items-end">
+                <Field label="Gramos">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    value={portionQty}
+                    onChange={(e) => setPortionQty(e.target.value)}
+                    placeholder="100"
+                  />
+                </Field>
+                <PortionPreview
+                  grams={finalGrams}
+                  kcal={selectedPreview?.kcal ?? 0}
+                  protein={selectedPreview?.protein ?? 0}
+                  carbs={selectedPreview?.carbs ?? 0}
+                  fats={selectedPreview?.fats ?? 0}
+                />
+              </div>
+            )}
           </div>
           <Button onClick={() => submitMeal(modal.meal)} disabled={!selectedFood} className="w-full py-4">
             Guardar en {modal.meal}
@@ -735,6 +923,34 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
           <X className="w-5 h-5" />
         </button>
         {children}
+      </div>
+    </div>
+  );
+}
+
+function PortionPreview({
+  grams,
+  kcal,
+  protein,
+  carbs,
+  fats,
+}: {
+  grams: number;
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-slate-500 mb-1.5">Equivale a</p>
+      <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950 px-3 py-2.5 text-sm">
+        <p className="font-bold">
+          {formatNumber(grams)} g · {formatNumber(kcal)} kcal
+        </p>
+        <p className="text-[11px] text-slate-500">
+          P {formatNumber(protein, 1)} · C {formatNumber(carbs, 1)} · G {formatNumber(fats, 1)}
+        </p>
       </div>
     </div>
   );

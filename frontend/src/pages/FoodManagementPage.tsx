@@ -10,6 +10,8 @@ import { useToast } from '../components/Toast';
 
 const emptyForm = { name: '', kcal: '', protein: '', carbs: '', fat: '', fiber: '0' };
 
+const normalizeText = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 export default function FoodManagementPage() {
   const { show } = useToast();
   const [foods, setFoods] = useState<Food[]>([]);
@@ -87,7 +89,9 @@ export default function FoodManagementPage() {
     }
   };
 
-  const filtered = foods.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = foods.filter((f) =>
+    normalizeText(f.name).includes(normalizeText(search.trim()))
+  );
 
   return (
     <div className="space-y-4">
