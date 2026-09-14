@@ -17,7 +17,7 @@ export interface FoodSearchResult {
   imageUrl: string | null;
 }
 
-const SEARCH_URL = 'https://world.openfoodfacts.org/api/v2/search';
+const SEARCH_URL = 'https://world.openfoodfacts.org/cgi/search.pl';
 const KJ_PER_KCAL = 4.184;
 
 function toNum(v: unknown): number {
@@ -45,8 +45,12 @@ export async function searchOpenFoodFacts(query: string, limit = 15): Promise<Fo
   if (trimmed.length < 2) return [];
 
   const url = new URL(SEARCH_URL);
-  url.searchParams.set('query', trimmed);
+  url.searchParams.set('search_terms', trimmed);
+  url.searchParams.set('search_simple', '1');
+  url.searchParams.set('action', 'process');
+  url.searchParams.set('json', '1');
   url.searchParams.set('page_size', String(limit));
+  url.searchParams.set('lc', 'es');
   url.searchParams.set('lang', 'es');
   url.searchParams.set(
     'fields',

@@ -391,7 +391,7 @@ export default function NutritionPage() {
                   >
                     <p className="font-medium">{f.name}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {formatNumber(f.kcalPer100)} kcal · {formatNumber(f.proteinPer100, 1)}g prot /100g
+                      Energía {formatNumber(f.kcalPer100)} kcal · Proteína {formatNumber(f.proteinPer100, 1)}g · Grasa {formatNumber(f.fatsPer100, 1)}g · Carbohidratos {formatNumber(f.carbsPer100, 1)}g /100g
                     </p>
                   </button>
                 ))}
@@ -418,7 +418,7 @@ export default function NutritionPage() {
                           <span className="truncate">{r.name}</span>
                         </p>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          {formatNumber(r.kcalPer100)} kcal · P {formatNumber(r.proteinPer100, 1)} · C {formatNumber(r.carbsPer100, 1)} · G {formatNumber(r.fatsPer100, 1)} /100g
+                          Energía {formatNumber(r.kcalPer100)} kcal · Proteína {formatNumber(r.proteinPer100, 1)}g · Grasa {formatNumber(r.fatsPer100, 1)}g · Carbohidratos {formatNumber(r.carbsPer100, 1)}g /100g
                           {r.servingGrams ? ` · ración ${formatNumber(r.servingGrams)}g ${r.kcalPerServing ? `(${formatNumber(r.kcalPerServing)} kcal)` : ''}` : ''}
                         </p>
                       </button>
