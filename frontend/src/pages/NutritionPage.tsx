@@ -312,11 +312,11 @@ export default function NutritionPage() {
         foods: [{ foodId: Number(selectedFood), grams: finalGrams }],
       });
       await api.post('/nutrition/recompute', { from: today });
-      setModal({ meal: '', open: false });
+      setSearch('');
       setSelectedFood('');
       setPortionMode('grams');
       setPortionQty('100');
-      show(`${mealName} actualizado`);
+      show('Alimento agregado');
       load();
     } catch (e) {
       show((e as Error).message, 'error');
@@ -325,14 +325,7 @@ export default function NutritionPage() {
 
   const removeFood = async (mealId: number, foodEntryId: number) => {
     try {
-      const meal = meals.find((m) => m.id === mealId);
-      if (!meal) return;
-      const remaining = meal.entries.filter((e) => e.id !== foodEntryId);
-      await api.post('/nutrition/meals', {
-        date: today,
-        name: meal.name,
-        foods: remaining.map((e) => ({ foodId: e.food.id, grams: e.grams })),
-      });
+      await api.delete(`/nutrition/meals/entry/${foodEntryId}`);
       await api.post('/nutrition/recompute', { from: today });
       show('Alimento eliminado');
       load();

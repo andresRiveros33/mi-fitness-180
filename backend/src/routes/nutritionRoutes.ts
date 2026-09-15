@@ -168,15 +168,15 @@ router.post('/meals', async (req, res) => {
     const date = startOfDay(new Date(data.date));
     const existing = await prisma.meal.findFirst({
       where: { date, name: data.name },
-      include: { entries: true },
     });
     let meal;
     if (existing) {
-      // replace foods
-      await prisma.mealFood.deleteMany({ where: { mealId: existing.id } });
-      meal = await prisma.meal.update({
+      // append foods to the existing meal (one-to-many MealFood)
+      await prisma.mealFood.createMany({
+        data: data.foods.map((f) => ({ mealId: existing.id, foodId: f.foodId, grams: f.grams })),
+      });
+      meal = await prisma.meal.findUnique({
         where: { id: existing.id },
-        data: { entries: { create: data.foods.map((f) => ({ foodId: f.foodId, grams: f.grams })) } },
         include: { entries: { include: { food: true } } },
       });
     } else {
@@ -191,6 +191,16 @@ router.post('/meals', async (req, res) => {
       });
     }
     res.json(meal);
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
+  }
+});
+
+router.delete('/meals/entry/:id', async (req, res) => {
+  try {
+    const { id } = idParamSchema.parse(req.params);
+    await prisma.mealFood.delete({ where: { id } });
+    res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
   }
