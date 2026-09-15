@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Save, ArrowLeft, Dumbbell, CheckCircle2, Minus, Timer, Info, ExternalLink } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Dumbbell, CheckCircle2, Minus, Timer, Info, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 import { api, todayISO } from '../lib/api';
+import {
+  addPendingOp,
+  clearWorkoutDraft,
+  flushPendingOps,
+  getWorkoutDraft,
+  makeId,
+  removePendingOp,
+  removePendingOps,
+  saveWorkoutDraft,
+} from '../lib/offlineStore';
 import type { Exercise } from '../types';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
@@ -43,22 +53,57 @@ export default function WorkoutTodayPage() {
   const [notes, setNotes] = useState('');
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [expandedExercise, setExpandedExercise] = useState<number | null>(0);
 
   const selectedDay = searchParams.get('day');
 
+  // Offline first: se persiste un borrador local de las series capturadas
+  // mientras el usuario entrena, antes de intentar guardar en la API.
+  useEffect(() => {
+    if (!workoutName) return;
+    const hasContent =
+      notes !== '' ||
+      duration !== '45' ||
+      exercises.some((ex) => ex.sets.some((s) => s.weight !== '' || s.reps !== '' || s.rir !== '2' || s.restSec !== '60'));
+    if (!hasContent) return;
+    saveWorkoutDraft(todayISO(), {
+      date: todayISO(),
+      workoutName,
+      existing,
+      duration,
+      notes,
+      exercises,
+      savedAt: new Date().toISOString(),
+    });
+  }, [exercises, duration, notes, workoutName, existing]);
+
   const load = useCallback(async () => {
     setLoading(true);
+    const today = todayISO();
     try {
+      // Reenvía un guardado que haya quedado pendiente sin conexión.
+      await flushPendingOps(today);
       const planUrl = selectedDay ? `/workouts/plan/today?day=${selectedDay}` : '/workouts/plan/today';
       const res = await api.get<{ workout: string | null; exercises: PlanExercise[]; dayOfWeek?: number }>(planUrl);
       setWorkoutName(res.workout);
       setPlan(res.exercises);
 
-      const today = todayISO();
       const workouts = await api.get<any[]>('/workouts');
       const found = workouts.find((w) => w.date.slice(0, 10) === today);
-      if (found && !selectedDay) {
+      const draft = getWorkoutDraft(today);
+
+      if (draft) {
+        // Prioridad al borrador local: el usuario editó series aún sin guardar.
+        setExisting(draft.existing);
+        setDuration(draft.duration);
+        setNotes(draft.notes);
+        const loaded: LocalExercise[] = (draft.exercises as LocalExercise[]).map((ex) => ({
+          plan: ex.plan,
+          sets: ex.sets.map((s) => ({ ...s })),
+        }));
+        setExercises(loaded);
+      } else if (found && !selectedDay) {
         setExisting(true);
         setDuration(String(found.durationMin ?? 45));
         setNotes(found.notes ?? '');
@@ -93,8 +138,21 @@ export default function WorkoutTodayPage() {
           }))
         );
       }
+      setSaveError(null);
     } catch (e) {
-      show((e as Error).message, 'error');
+      // Sin conexión: se recuperan las series desde el dispositivo.
+      const draft = getWorkoutDraft(today);
+      if (draft && draft.exercises.length > 0) {
+        setWorkoutName(draft.workoutName);
+        setPlan(draft.exercises.map((ex: any) => ex.plan));
+        setExisting(draft.existing);
+        setDuration(draft.duration);
+        setNotes(draft.notes);
+        setExercises(draft.exercises as LocalExercise[]);
+        show('Sin conexión: recuperaste tus series desde este dispositivo', 'error');
+      } else {
+        show((e as Error).message, 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -149,38 +207,56 @@ export default function WorkoutTodayPage() {
   const handleSave = async () => {
     if (!workoutName) return;
     setSaveLoading(true);
+    setSaveError(null);
+    const payload = {
+      date: todayISO(),
+      name: workoutName,
+      durationMin: Number(duration) || 45,
+      notes: notes || null,
+      exercises: exercises
+        .filter((ex) => ex.sets.some((s) => s.reps !== '' && s.reps !== '0'))
+        .map((ex, idx) => ({
+          exerciseId: ex.plan.exerciseId ?? 0,
+          name: ex.plan.name,
+          order: idx + 1,
+          sets: ex.sets
+            .map((s, i) => ({
+              setNumber: i + 1,
+              weightKg: Number(s.weight) || 0,
+              reps: Number(s.reps) || 0,
+              rir: Number(s.rir) || 0,
+              restSec: Number(s.restSec) || 60,
+            }))
+            .filter((s) => s.reps > 0),
+        }))
+        .filter((ex) => ex.sets.length > 0),
+    };
+    if (payload.exercises.length === 0) {
+      show('Registra al menos una serie con repeticiones', 'error');
+      return;
+    }
+    // Offline first: una sola operación pendiente por día (la API hace upsert por fecha).
+    removePendingOps('workoutSave', todayISO());
+    const opId = addPendingOp({
+      id: makeId(),
+      kind: 'workoutSave',
+      date: todayISO(),
+      payload,
+      createdAt: new Date().toISOString(),
+      attempts: 0,
+    });
     try {
-      const payload = {
-        date: todayISO(),
-        name: workoutName,
-        durationMin: Number(duration) || 45,
-        notes: notes || null,
-        exercises: exercises
-          .filter((ex) => ex.sets.some((s) => s.reps !== '' && s.reps !== '0'))
-          .map((ex, idx) => ({
-            exerciseId: ex.plan.exerciseId as number,
-            order: idx + 1,
-            sets: ex.sets
-              .map((s, i) => ({
-                setNumber: i + 1,
-                weightKg: Number(s.weight) || 0,
-                reps: Number(s.reps) || 0,
-                rir: Number(s.rir) || 0,
-                restSec: Number(s.restSec) || 60,
-              }))
-              .filter((s) => s.reps > 0),
-          }))
-          .filter((ex) => ex.sets.length > 0),
-      };
-      if (payload.exercises.length === 0) {
-        show('Registra al menos una serie con repeticiones', 'error');
-        return;
-      }
       await api.post('/workouts', payload);
+      removePendingOp(opId);
+      clearWorkoutDraft(todayISO());
       show(existing ? 'Entrenamiento actualizado ✓' : 'Entrenamiento guardado ✓');
+      setSaveError(null);
       navigate('/entrenamiento');
     } catch (e) {
-      show((e as Error).message, 'error');
+      // No se cierra la pantalla ni se limpian las series: quedan en pantalla
+      // y en el almacenamiento local para reintentar o sincronizar después.
+      setSaveError((e as Error).message);
+      show('No se pudo guardar. Tus series siguen en pantalla y en este dispositivo.', 'error');
     } finally {
       setSaveLoading(false);
     }
@@ -437,11 +513,39 @@ export default function WorkoutTodayPage() {
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : (
             <>
-              <Save className="w-5 h-5" /> Guardar entrenamiento
+              <Save className="w-5 h-5" /> {saveError ? 'Reintentar guardar' : 'Guardar entrenamiento'}
             </>
           )}
         </Button>
       </div>
+
+      {/* Error al guardar: se mantienen las series en pantalla */}
+      {saveError && (
+        <div className="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-rose-500 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-rose-700 dark:text-rose-300">
+                No se pudo guardar el entrenamiento
+              </p>
+              <p className="text-xs text-rose-600 dark:text-rose-400 mt-1 leading-relaxed">
+                Hubo un error de conexión o del servidor. Tus series siguen en pantalla y quedaron
+                guardadas en este dispositivo. Puedes reintentar o salir y volver más tarde.
+              </p>
+              <p className="text-[10px] text-rose-500/70 mt-1">{saveError}</p>
+            </div>
+          </div>
+          <Button onClick={handleSave} disabled={saveLoading} className="w-full">
+            {saveLoading ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4" /> Reintentar guardar
+              </>
+            )}
+          </Button>
+        </div>
+      )}
 
       {existing && (
         <p className="text-center text-xs text-emerald-600 flex items-center justify-center gap-1 pb-4">

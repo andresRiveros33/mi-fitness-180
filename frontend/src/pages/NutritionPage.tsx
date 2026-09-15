@@ -13,6 +13,16 @@ import {
   Search,
 } from 'lucide-react';
 import { api, formatNumber, todayISO } from '../lib/api';
+import {
+  addPendingOp,
+  flushPendingOps,
+  getNutritionSnapshot,
+  getPendingOps,
+  makeId,
+  removePendingOp,
+  removePendingOps,
+  saveNutritionSnapshot,
+} from '../lib/offlineStore';
 import basicIngredientsFromFile from '../data/basicIngredients.json';
 import type { ExternalFoodSearchResult, Food, Meal, NutritionEntry, UserProfile } from '../types';
 import { Card, CardHeader } from '../components/Card';
@@ -102,6 +112,7 @@ export default function NutritionPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    let online = true;
     try {
       const [p, f, m] = await Promise.all([
         api.get<UserProfile>('/users/profile'),
@@ -113,10 +124,32 @@ export default function NutritionPage() {
       setMeals(m);
       const e = await api.get<NutritionEntry[]>('/nutrition/entry', { from: today, to: today });
       setEntry(e[0] ?? null);
+      saveNutritionSnapshot(today, { meals: m, entry: e[0] ?? null, savedAt: new Date().toISOString() });
     } catch (err) {
-      show((err as Error).message, 'error');
+      online = false;
+      const snapshot = getNutritionSnapshot(today);
+      if (snapshot) {
+        setMeals(snapshot.meals);
+        setEntry(snapshot.entry);
+        show('Sin conexión: recuperando lo ingresado hoy desde este dispositivo', 'error');
+      } else {
+        show((err as Error).message, 'error');
+      }
     } finally {
       setLoading(false);
+    }
+
+    if (online) {
+      // Reenvía lo que quedó pendiente de una sesión sin conexión.
+      try {
+        const synced = await flushPendingOps(today);
+        if (synced > 0) {
+          await api.post('/nutrition/recompute', { from: today });
+          load();
+        }
+      } catch {
+        // sigue sin conexión; los datos quedan en la cola local
+      }
     }
   }, [show, today]);
 
@@ -305,25 +338,78 @@ export default function NutritionPage() {
 
   const submitMeal = async (mealName: string) => {
     if (!selectedFood) return;
+    const food = selectedFoodObj;
+    const payload = {
+      date: today,
+      name: mealName,
+      foods: [{ foodId: Number(selectedFood), grams: finalGrams }],
+    };
+    // Offline first: se respalda localmente ANTES de la petición a la API.
+    const opId = addPendingOp({
+      id: makeId(),
+      kind: 'mealAdd',
+      date: today,
+      payload,
+      createdAt: new Date().toISOString(),
+      attempts: 0,
+    });
+
+    setSearch('');
+    setSelectedFood('');
+    setPortionMode('grams');
+    setPortionQty('100');
+
+    let online = false;
     try {
-      await api.post('/nutrition/meals', {
-        date: today,
-        name: mealName,
-        foods: [{ foodId: Number(selectedFood), grams: finalGrams }],
-      });
+      await api.post('/nutrition/meals', payload);
       await api.post('/nutrition/recompute', { from: today });
-      setSearch('');
-      setSelectedFood('');
-      setPortionMode('grams');
-      setPortionQty('100');
+      removePendingOp(opId);
+      online = true;
+    } catch (e) {
+      // La API falló: el alimento queda guardado en este dispositivo y visible en pantalla.
+      if (food) optimisticMealAdd(mealName, food);
+      show(
+        'Guardado en este dispositivo; se sincronizará cuando haya conexión',
+        'error'
+      );
+    }
+    if (online) {
       show('Alimento agregado');
       load();
-    } catch (e) {
-      show((e as Error).message, 'error');
     }
   };
 
-  const removeFood = async (mealId: number, foodEntryId: number) => {
+  const optimisticMealAdd = (mealName: string, food: Food) => {
+    const existing = meals.find((m) => m.name === mealName);
+    const entryId = -Date.now();
+    const mealEntry = { id: entryId, food, grams: finalGrams };
+    const next = existing
+      ? meals.map((m) => (m.name === mealName ? { ...m, entries: [...m.entries, mealEntry] } : m))
+      : [...meals, { id: entryId, name: mealName, date: today, entries: [mealEntry] }];
+    setMeals(next);
+    saveNutritionSnapshot(today, { meals: next, entry, savedAt: new Date().toISOString() });
+  };
+
+  const removeFood = async (mealId: number, foodEntryId: number, mealName: string, foodId: number, grams: number) => {
+    // Entrada local que aún no se sincronizó: se elimina del almacenamiento local.
+    if (foodEntryId < 0) {
+      const localOps = getPendingOps().filter(
+        (op) =>
+          op.kind === 'mealAdd' &&
+          op.date === today &&
+          (op.payload as any)?.name === mealName &&
+          (op.payload as any)?.foods?.[0]?.foodId === foodId &&
+          (op.payload as any)?.foods?.[0]?.grams === grams
+      );
+      localOps.forEach((op) => removePendingOp(op.id));
+      const next = meals.map((m) =>
+        m.id === mealId ? { ...m, entries: m.entries.filter((e) => e.id !== foodEntryId) } : m
+      );
+      setMeals(next);
+      saveNutritionSnapshot(today, { meals: next, entry, savedAt: new Date().toISOString() });
+      show('Alimento eliminado');
+      return;
+    }
     try {
       await api.delete(`/nutrition/meals/entry/${foodEntryId}`);
       await api.post('/nutrition/recompute', { from: today });
@@ -336,14 +422,43 @@ export default function NutritionPage() {
 
   const addWater = async (ml: number) => {
     const newWater = Math.min(10000, waterMl + ml);
+    const payload = { date: today, waterMl: newWater };
+    // Offline first: respaldo local antes de la API (el valor es absoluto, se reemplaza).
+    removePendingOps('waterUpdate', today);
+    addPendingOp({
+      id: makeId(),
+      kind: 'waterUpdate',
+      date: today,
+      payload,
+      createdAt: new Date().toISOString(),
+      attempts: 0,
+    });
+    let online = false;
     try {
-      await api.post('/nutrition/entry', { date: today, waterMl: newWater });
-      setEntry((prev) => (prev ? { ...prev, waterMl: newWater } : ({ date: today, waterMl: newWater } as NutritionEntry)));
-      setWaterQuickAdd(false);
-      show(`Agua: ${formatNumber(newWater / 1000, 2)} L`);
-    } catch (e) {
-      show((e as Error).message, 'error');
+      await api.post('/nutrition/entry', payload);
+      removePendingOps('waterUpdate', today);
+      online = true;
+    } catch {
+      // queda en la cola local
     }
+    const nextEntry: NutritionEntry = {
+      id: entry?.id ?? 0,
+      date: today,
+      calories: entry?.calories ?? 0,
+      proteinG: entry?.proteinG ?? 0,
+      carbsG: entry?.carbsG ?? 0,
+      fatsG: entry?.fatsG ?? 0,
+      fiberG: entry?.fiberG ?? 0,
+      waterMl: newWater,
+    };
+    setEntry(nextEntry);
+    saveNutritionSnapshot(today, { meals, entry: nextEntry, savedAt: new Date().toISOString() });
+    setWaterQuickAdd(false);
+    show(
+      online
+        ? `Agua: ${formatNumber(newWater / 1000, 2)} L`
+        : 'Agua guardada en este dispositivo; se sincronizará después'
+    );
   };
 
   const q = normalizeText(search.trim());
@@ -519,7 +634,7 @@ export default function NutritionPage() {
                       </p>
                     </div>
                     <button
-                      onClick={() => removeFood(meal.id, fe.id)}
+                      onClick={() => removeFood(meal.id, fe.id, meal.name, fe.food.id, fe.grams)}
                       className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-rose-500 active:text-rose-600 shrink-0"
                     >
                       <Trash2 className="w-4 h-4" />

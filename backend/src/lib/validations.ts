@@ -46,7 +46,8 @@ export const workoutSetSchema = z.object({
 });
 
 export const workoutExerciseSchema = z.object({
-  exerciseId: z.number().int().positive(),
+  exerciseId: z.number().int().min(0), // 0 = resolver por nombre
+  name: z.string().optional(),
   order: z.number().int().min(1),
   sets: z.array(workoutSetSchema).min(1),
 });

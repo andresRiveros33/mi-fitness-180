@@ -1,13 +1,27 @@
 const API_BASE = 'https://mi-fitness-180.onrender.com/api';
+const REQUEST_TIMEOUT_MS = 25000;
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    if ((e as Error).name === 'AbortError') {
+      throw new Error('El servidor tardó demasiado en responder. Revisa tu conexión e intenta de nuevo.');
+    }
+    throw new Error('Sin conexión con el servidor. Usa el guardado local mientras se restablece la red.');
+  }
+  clearTimeout(timer);
   if (!res.ok) {
     let message = `Error ${res.status}`;
     try {

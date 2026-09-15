@@ -39,11 +39,39 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Resuelve a un Exercise existente o, si el id no está disponible (0 o null),
+// lo busca o crea por nombre para que el guardado nunca falle por datos faltantes.
+async function resolveExerciseId(ex: { exerciseId: number; name?: string }): Promise<number> {
+  if (ex.exerciseId && ex.exerciseId > 0) return ex.exerciseId;
+  const name = (ex.name ?? '').trim();
+  if (!name) {
+    throw new Error('Es necesario un ejercicio válido para guardar la serie');
+  }
+  const found = await prisma.exercise.findFirst({ where: { name } });
+  if (found) return found.id;
+  const created = await prisma.exercise.create({
+    data: { name, category: 'general', isProgram: false },
+  });
+  return created.id;
+}
+
 router.post('/', async (req, res) => {
   try {
     const data = workoutSchema.parse(req.body);
     const date = startOfDay(new Date(data.date));
     const existing = await prisma.workout.findUnique({ where: { date } });
+
+    const mapExercises = async () =>
+      Promise.all(
+        data.exercises.map(async (ex) => {
+          const exerciseId = await resolveExerciseId(ex as { exerciseId: number; name?: string });
+          return {
+            exerciseId,
+            order: ex.order,
+            sets: { create: ex.sets.map((s) => ({ ...s })) },
+          };
+        })
+      );
 
     if (existing) {
       await prisma.workoutExercise.deleteMany({ where: { workoutId: existing.id } });
@@ -53,13 +81,7 @@ router.post('/', async (req, res) => {
           name: data.name,
           durationMin: data.durationMin,
           notes: data.notes ?? null,
-          exercises: {
-            create: data.exercises.map((ex) => ({
-              exerciseId: ex.exerciseId,
-              order: ex.order,
-              sets: { create: ex.sets.map((s) => ({ ...s })) },
-            })),
-          },
+          exercises: { create: await mapExercises() },
         },
         include: { exercises: { include: { sets: true, exercise: true } } },
       });
@@ -75,13 +97,7 @@ router.post('/', async (req, res) => {
         durationMin: data.durationMin,
         notes: data.notes ?? null,
         exercises: {
-          create: data.exercises.map((ex) => ({
-            exerciseId: ex.exerciseId,
-            order: ex.order,
-            sets: {
-              create: ex.sets.map((s) => ({ ...s })),
-            },
-          })),
+          create: await mapExercises(),
         },
       },
       include: { exercises: { include: { sets: true, exercise: true } } },

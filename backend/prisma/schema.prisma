@@ -1,12 +1,12 @@
 // Mi Fitness 180 - Prisma Schema
-// Database: SQLite
+// Database: PostgreSQL (persistente, incluida producción en Render)
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
