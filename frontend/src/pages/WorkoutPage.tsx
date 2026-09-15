@@ -29,10 +29,9 @@ interface ExerciseHistory {
 }
 
 const PROGRAM_PREVIEW = [
-  { name: 'Tren superior A', schedule: 'Lunes', count: 7, dow: 1 },
-  { name: 'Piernas A', schedule: 'Martes', count: 6, dow: 2 },
-  { name: 'Tren superior B', schedule: 'Jueves', count: 7, dow: 4 },
-  { name: 'Piernas B', schedule: 'Viernes', count: 6, dow: 5 },
+  { name: 'Push', schedule: 'Lunes', count: 6, dow: 1 },
+  { name: 'Pull', schedule: 'Miércoles', count: 7, dow: 3 },
+  { name: 'Legs', schedule: 'Viernes', count: 6, dow: 5 },
 ];
 
 export default function WorkoutPage() {
@@ -119,7 +118,7 @@ export default function WorkoutPage() {
       {/* Program */}
       {activeTab === 'programa' && (
         <Card>
-          <CardHeader title="Programa semanal" subtitle="4 días a la semana" />
+          <CardHeader title="Programa semanal" subtitle="3 días · Push / Pull / Legs" />
           <div className="space-y-2">
             {PROGRAM_PREVIEW.map((p) => (
               <Link

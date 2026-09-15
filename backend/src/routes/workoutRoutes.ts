@@ -121,11 +121,11 @@ router.delete('/:id', async (req, res) => {
 
 const DOW_SCHEDULE: Record<number, string | null> = {
   0: null, // Domingo
-  1: 'Tren superior A', // Lunes
-  2: 'Piernas A', // Martes
-  3: null, // Miércoles
-  4: 'Tren superior B', // Jueves
-  5: 'Piernas B', // Viernes
+  1: 'Push', // Lunes
+  2: null, // Martes
+  3: 'Pull', // Miércoles
+  4: null, // Jueves
+  5: 'Legs', // Viernes
   6: null, // Sábado
 };
 
@@ -144,6 +144,7 @@ function planToExercises(plan: ExercisePlan[], dbExercises: any[]) {
       unit: p.unit,
       notes: p.notes ?? null,
       mediaUrl: p.mediaUrl ?? null,
+      bodyweight: p.bodyweight ?? false,
       exerciseId: db?.id ?? null,
     };
   });
@@ -222,51 +223,42 @@ interface ExercisePlan {
   unit: string;
   notes?: string;
   mediaUrl?: string;
+  bodyweight?: boolean;
 }
 
 const PROGRAM: Record<string, ExercisePlan[]> = {
-  'Tren superior A': [
-    { name: 'Press de banca con mancuernas', sets: 3, min: 6, max: 10, unit: 'reps', notes: 'Aprieta escápulas, baja controlado hasta pecho, empuja explosivo.' },
-    { name: 'Remo con mancuerna', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Espalda recta, codo cerca del cuerpo, aprieta la espalda arriba.' },
-    { name: 'Dominadas / jalón asistido', sets: 3, min: 0, max: 0, unit: 'max', notes: 'Máximas repeticiones posibles. Usa máquina asistida o banda si es necesario. Agarre prono, controla la bajada.' },
-    { name: 'Press militar sentado', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Espalda recta contra el respaldo, presiona en arco ligero, baja hasta barbilla.' },
-    { name: 'Curl de bíceps', sets: 2, min: 10, max: 15, unit: 'reps', notes: 'Codos pegados al torso, movimiento controlado sin balanceo.' },
-    { name: 'Extensión de tríceps', sets: 2, min: 10, max: 15, unit: 'reps', notes: 'Codos fijos, extiende completo, baja controlado.' },
-    { name: 'Plancha', sets: 3, min: 30, max: 60, unit: 'seg', notes: 'Cuerpo en línea recta, contrae abdomen y glúteos. No hundas la cadera.' },
+  Push: [
+    { name: 'Flexiones de pecho (Push-ups)', sets: 3, min: 8, max: 15, unit: 'reps', bodyweight: true, notes: 'Cuerpo en línea recta, baja hasta que el pecho toque el suelo, empuja explosivo. Aprieta glúteos y abdomen.' },
+    { name: 'Fondos en banco (Bench dips)', sets: 3, min: 8, max: 15, unit: 'reps', bodyweight: true, notes: 'Manos en el borde del banco, baja hasta 90° en codos, sube empujando. Piernas extendidas para más dificultad.' },
+    { name: 'Press de banca plano con mancuernas', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Aprieta escápulas, baja controlado hasta el pecho, empuja sin bloquear codos.' },
+    { name: 'Press militar de pie con mancuernas', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'De pie, abdomen firme, presiona en arco evitando arquear la zona baja. Baja hasta la barbilla.' },
+    { name: 'Elevaciones laterales con banda elástica', sets: 3, min: 12, max: 20, unit: 'reps', notes: 'De pie sobre la banda, sube hasta paralelo al suelo, baja controlado. Sin impulso.' },
+    { name: 'Extensión de tríceps con barra romana o banda', sets: 2, min: 10, max: 15, unit: 'reps', notes: 'Codos fijos junto a la cabeza, extiende completo, baja controlado.' },
   ],
-  'Piernas A': [
-    { name: 'Sentadilla goblet', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Mancuerna al pecho, descente profundo, rodillas alineadas con pies. Pecho arriba.' },
-    { name: 'Peso muerto rumano con mancuernas', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Piernas ligeramente flexionadas, empuja caderas atrás, baja hasta sentir tensión en isquios. Espalda recta.' },
-    { name: 'Zancadas', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Paso largo, rodilla trasera cerca del suelo. Mantén torso erguido. Alternar piernas.' },
-    { name: 'Hip thrust con mancuerna', sets: 3, min: 10, max: 15, unit: 'reps', notes: 'Espalda alta contra banco, extiende cadera completo, aprieta glúteos arriba 1s.' },
-    { name: 'Elevación de pantorrillas', sets: 3, min: 12, max: 20, unit: 'reps', notes: 'De pie en borde de escalón, sube completo, baja estirando. Controla el movimiento.' },
-    { name: 'Dead bug', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Espalda baja pegada al suelo, extiende brazo y pierna opuestos. Controla la respiración.' },
+  Pull: [
+    { name: 'Remo horizontal con barra o mancuernas', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Espalda recta, jala hacia el abdomen, aprieta la espalda. Baja controlado.' },
+    { name: 'Remo con banda elástica', sets: 3, min: 12, max: 20, unit: 'reps', notes: 'Siéntate con piernas extendidas, jala la banda hacia el abdomen manteniendo la espalda recta.' },
+    { name: 'Pullover con mancuerna en banco', sets: 3, min: 10, max: 15, unit: 'reps', notes: 'Acostado sobre el banco, baja la mancuerna detrás de la cabeza con brazos casi rectos, vuelve sobre el pecho.' },
+    { name: 'Vuelos posteriores / Pájaro con mancuernas', sets: 3, min: 12, max: 20, unit: 'reps', notes: 'Inclinado hacia adelante, abre los brazos en arco, aprieta los deltoides posteriores arriba.' },
+    { name: 'Curl de bíceps con barra romana', sets: 3, min: 10, max: 15, unit: 'reps', notes: 'Codos pegados al torso, sube la barra sin balanceo, baja controlado.' },
+    { name: 'Curl martillo con mancuernas', sets: 2, min: 10, max: 15, unit: 'reps', notes: 'Palmas enfrentadas, sube controlado, baja lento. Codos fijos.' },
+    { name: 'Plancha abdominal', sets: 3, min: 30, max: 60, unit: 'seg', bodyweight: true, notes: 'Cuerpo en línea recta, contrae abdomen y glúteos. No hundas la cadera.' },
   ],
-  'Tren superior B': [
-    { name: 'Press inclinado con mancuernas', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Banco a 30-45°, baja controlado hasta pecho, empuja en ángulo. Aprieta escápulas.' },
-    { name: 'Fondos en paralelas o banco', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Baja hasta 90° en codos, sube empujando. Inclínate ligeramente hacia adelante para pecho.' },
-    { name: 'Remo a una mano', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Apoya mano y rodilla en banco, rema la mancuerna hacia la cadera. Espalda recta.' },
-    { name: 'Elevaciones laterales', sets: 3, min: 12, max: 20, unit: 'reps', notes: 'Brazos casi rectos, sube hasta paralelo al suelo, baja controlado. Sin impulso.' },
-    { name: 'Pájaros / rear delt fly', sets: 2, min: 12, max: 20, unit: 'reps', notes: 'Inclinado hacia adelante, abre brazos en arco, aprieta deltoides posteriores arriba.' },
-    { name: 'Curl martillo', sets: 2, min: 10, max: 15, unit: 'reps', notes: 'Palmas enfrentadas, sube controlado, baja lento. Codos fijos.' },
-    { name: 'Tríceps por encima de la cabeza', sets: 2, min: 10, max: 15, unit: 'reps', notes: 'Brazo vertical junto a la oreja, extiende el codo. Mantén el codo fijo.' },
-  ],
-  'Piernas B': [
-    { name: 'Sentadilla búlgara', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Pie trasero en banco, baja hasta muslo paralelo. Rodilla delantera alineada. Controla el equilibrio.' },
-    { name: 'Peso muerto rumano', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Mancuernas al frente de piernas, empuja caderas atrás. Baja hasta donde mantengas espalda recta.' },
-    { name: 'Step-up al banco', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Sube con pierna delantera, empuja la cadera. Baja controlado. Alterna piernas.' },
-    { name: 'Hip thrust', sets: 3, min: 10, max: 15, unit: 'reps', notes: 'Espalda alta en banco, empuja cadera arriba, aprieta glúteos. Pies al ancho de caderas.' },
-    { name: 'Pantorrillas', sets: 3, min: 12, max: 20, unit: 'reps', notes: 'De pie en borde de escalón, sube sobre puntas, baja estirando. Rango completo.' },
-    { name: 'Plancha lateral', sets: 3, min: 30, max: 45, unit: 'seg', notes: 'Cuerpo en línea recta de lado, cadera elevada. Contrae oblicuos. Alternar lados.' },
+  Legs: [
+    { name: 'Sentadilla libre (peso corporal)', sets: 3, min: 10, max: 20, unit: 'reps', bodyweight: true, notes: 'Desciende profundo con pecho arriba, rodillas alineadas con los pies. Empuja el suelo al subir.' },
+    { name: 'Sentadilla Goblet con mancuerna', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Mancuerna al pecho, desciende profundo, rodillas alineadas con los pies. Mantén el pecho arriba.' },
+    { name: 'Peso muerto rumano con barra', sets: 3, min: 8, max: 12, unit: 'reps', notes: 'Piernas ligeramente flexionadas, empuja caderas atrás, baja hasta sentir tensión en isquios. Espalda recta.' },
+    { name: 'Zancadas / Lunges alternadas', sets: 3, min: 10, max: 20, unit: 'reps', bodyweight: true, notes: 'Paso largo, rodilla trasera cerca del suelo. Torso erguido. Alterna piernas.' },
+    { name: 'Hip thrust en banco', sets: 3, min: 10, max: 15, unit: 'reps', bodyweight: true, notes: 'Espalda alta contra el banco, extiende la cadera completo, aprieta glúteos arriba 1 s.' },
+    { name: 'Elevación de talones de pie', sets: 3, min: 12, max: 25, unit: 'reps', bodyweight: true, notes: 'De pie en el borde de un escalón, sube completo sobre puntas, baja estirando. Controla el movimiento.' },
   ],
 };
 
 export function workoutProgram(): Array<{ name: string; schedule: string; exercises: ExercisePlan[] }> {
   return [
-    { name: 'Tren superior A', schedule: 'Lunes', exercises: PROGRAM['Tren superior A'] },
-    { name: 'Piernas A', schedule: 'Martes', exercises: PROGRAM['Piernas A'] },
-    { name: 'Tren superior B', schedule: 'Jueves', exercises: PROGRAM['Tren superior B'] },
-    { name: 'Piernas B', schedule: 'Viernes', exercises: PROGRAM['Piernas B'] },
+    { name: 'Push', schedule: 'Lunes', exercises: PROGRAM['Push'] },
+    { name: 'Pull', schedule: 'Miércoles', exercises: PROGRAM['Pull'] },
+    { name: 'Legs', schedule: 'Viernes', exercises: PROGRAM['Legs'] },
   ];
 }
 

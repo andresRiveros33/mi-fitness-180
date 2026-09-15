@@ -22,8 +22,12 @@ export interface DashboardData {
   nutritionLoggedToday: boolean;
 }
 
-const WORKOUT_SCHEDULE = ['Tren superior A', 'Piernas A', 'Tren superior B', 'Piernas B'];
-// Lunes, Martes, Jueves, Viernes
+// Push (Lunes), Pull (Miércoles), Legs (Viernes)
+const WORKOUT_SCHEDULE: Record<number, string> = {
+  1: 'Push',
+  3: 'Pull',
+  5: 'Legs',
+};
 
 export async function getDashboard(prisma: PrismaClient): Promise<DashboardData> {
   const profile = await prisma.userProfile.findFirst();
@@ -69,13 +73,15 @@ export async function getDashboard(prisma: PrismaClient): Promise<DashboardData>
   const proteinConsumed = nutrition?.proteinG ?? 0;
   const proteinRemaining = Math.max(0, (profile?.proteinTarget ?? 145) - proteinConsumed);
 
-  // Next workout based on today's day of week
+  // Next workout: el día de entrenamiento que sigue (o de hoy si aún no se registró)
   const getNextWorkout = () => {
-    const dayOfWeek = today.getDay(); // 0 sun .. 6 sat
-    const map: Record<number, number> = { 0: 0, 1: 1, 2: 2, 3: 2, 4: 3, 5: 4, 6: 4 };
-    const idx = map[dayOfWeek];
-    const schedule = idx >= 4 ? [] : WORKOUT_SCHEDULE.slice(idx, idx + 4);
-    return schedule.includes(WORKOUT_SCHEDULE[0]) ? schedule[0] : WORKOUT_SCHEDULE[0];
+    const dow = today.getDay(); // 0 sun .. 6 sat
+    if (WORKOUT_SCHEDULE[dow] && !workout) return WORKOUT_SCHEDULE[dow];
+    for (let i = 1; i <= 7; i++) {
+      const d = (dow + i) % 7;
+      if (WORKOUT_SCHEDULE[d]) return WORKOUT_SCHEDULE[d];
+    }
+    return null;
   };
 
   return {
@@ -91,7 +97,7 @@ export async function getDashboard(prisma: PrismaClient): Promise<DashboardData>
     caloriesRemaining,
     proteinConsumed,
     proteinRemaining,
-    todaysWorkout: WORKOUT_SCHEDULE[(today.getDay() + 6) % 7], // temp
+    todaysWorkout: WORKOUT_SCHEDULE[today.getDay()] ?? null,
     nextWorkout: getNextWorkout(),
     steps: activity?.steps ?? 0,
     waterMl: nutrition?.waterMl ?? 0,

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Save, ArrowLeft, Dumbbell, CheckCircle2, Minus, Timer, Info, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Dumbbell, CheckCircle2, Minus, Timer, Info, ExternalLink, AlertCircle, RefreshCw, Flame, Activity } from 'lucide-react';
 import { api, todayISO } from '../lib/api';
+import { WARMUP_EXERCISES, STRETCH_EXERCISES } from '../data/workoutGuide';
 import {
   addPendingOp,
   clearWorkoutDraft,
@@ -27,6 +28,7 @@ interface PlanExercise {
   exerciseId: number | null;
   notes?: string | null;
   mediaUrl?: string | null;
+  bodyweight?: boolean;
 }
 
 interface LocalSet {
@@ -34,6 +36,7 @@ interface LocalSet {
   reps: string;
   rir: string;
   restSec: string;
+  bodyweight: boolean;
 }
 
 interface LocalExercise {
@@ -52,6 +55,8 @@ export default function WorkoutTodayPage() {
   const [duration, setDuration] = useState('45');
   const [notes, setNotes] = useState('');
   const [exercises, setExercises] = useState<LocalExercise[]>([]);
+  const [warmup, setWarmup] = useState<Record<string, boolean>>({});
+  const [stretches, setStretches] = useState<Record<string, boolean>>({});
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [expandedExercise, setExpandedExercise] = useState<number | null>(0);
@@ -65,6 +70,8 @@ export default function WorkoutTodayPage() {
     const hasContent =
       notes !== '' ||
       duration !== '45' ||
+      Object.values(warmup).some(Boolean) ||
+      Object.values(stretches).some(Boolean) ||
       exercises.some((ex) => ex.sets.some((s) => s.weight !== '' || s.reps !== '' || s.rir !== '2' || s.restSec !== '60'));
     if (!hasContent) return;
     saveWorkoutDraft(todayISO(), {
@@ -74,9 +81,11 @@ export default function WorkoutTodayPage() {
       duration,
       notes,
       exercises,
+      warmup,
+      stretches,
       savedAt: new Date().toISOString(),
     });
-  }, [exercises, duration, notes, workoutName, existing]);
+  }, [exercises, duration, notes, workoutName, existing, warmup, stretches]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,15 +107,21 @@ export default function WorkoutTodayPage() {
         setExisting(draft.existing);
         setDuration(draft.duration);
         setNotes(draft.notes);
+        setWarmup((draft.warmup as Record<string, boolean>) ?? {});
+        setStretches((draft.stretches as Record<string, boolean>) ?? {});
         const loaded: LocalExercise[] = (draft.exercises as LocalExercise[]).map((ex) => ({
           plan: ex.plan,
-          sets: ex.sets.map((s) => ({ ...s })),
+          sets: ex.sets.map((s) => ({ ...s, bodyweight: s.bodyweight ?? false })),
         }));
         setExercises(loaded);
       } else if (found && !selectedDay) {
+        // Los ejercicios ya registrados conservan su marca de peso corporal según el plan.
+        const bodyweightByName = new Map(res.exercises.map((p) => [p.name, p.bodyweight ?? false]));
         setExisting(true);
         setDuration(String(found.durationMin ?? 45));
         setNotes(found.notes ?? '');
+        setWarmup({});
+        setStretches({});
         const loaded: LocalExercise[] = found.exercises.map((we: any) => ({
           plan: {
             name: we.exercise.name,
@@ -115,17 +130,21 @@ export default function WorkoutTodayPage() {
             max: 12,
             unit: 'reps',
             exerciseId: we.exerciseId,
+            bodyweight: bodyweightByName.get(we.exercise.name) ?? false,
           },
           sets: we.sets.map((s: any) => ({
             weight: String(s.weightKg ?? ''),
             reps: String(s.reps ?? ''),
             rir: String(s.rir ?? ''),
             restSec: String(s.restSec ?? '60'),
+            bodyweight: bodyweightByName.get(we.exercise.name) ?? false,
           })),
         }));
         setExercises(loaded);
       } else {
         setExisting(false);
+        setWarmup({});
+        setStretches({});
         setExercises(
           res.exercises.map((ex) => ({
             plan: ex,
@@ -134,6 +153,7 @@ export default function WorkoutTodayPage() {
               reps: '',
               rir: '2',
               restSec: '60',
+              bodyweight: ex.bodyweight ?? false,
             })),
           }))
         );
@@ -148,6 +168,8 @@ export default function WorkoutTodayPage() {
         setExisting(draft.existing);
         setDuration(draft.duration);
         setNotes(draft.notes);
+        setWarmup((draft.warmup as Record<string, boolean>) ?? {});
+        setStretches((draft.stretches as Record<string, boolean>) ?? {});
         setExercises(draft.exercises as LocalExercise[]);
         show('Sin conexión: recuperaste tus series desde este dispositivo', 'error');
       } else {
@@ -162,7 +184,9 @@ export default function WorkoutTodayPage() {
     load();
   }, [load]);
 
-  const updateSet = (exIdx: number, setIdx: number, field: keyof LocalSet, value: string) => {
+  type SetNumberField = 'weight' | 'reps' | 'rir' | 'restSec';
+
+  const updateSet = (exIdx: number, setIdx: number, field: SetNumberField, value: string) => {
     setExercises((prev) => {
       const next = prev.map((ex, i) =>
         i === exIdx
@@ -173,7 +197,7 @@ export default function WorkoutTodayPage() {
     });
   };
 
-  const incrementField = (exIdx: number, setIdx: number, field: keyof LocalSet, step: number) => {
+  const incrementField = (exIdx: number, setIdx: number, field: SetNumberField, step: number) => {
     setExercises((prev) => {
       const next = prev.map((ex, i) =>
         i === exIdx
@@ -195,9 +219,31 @@ export default function WorkoutTodayPage() {
   const addSet = (exIdx: number) => {
     setExercises((prev) =>
       prev.map((ex, i) =>
-        i === exIdx ? { ...ex, sets: [...ex.sets, { weight: '', reps: '', rir: '2', restSec: '60' }] } : ex
+        i === exIdx
+          ? { ...ex, sets: [...ex.sets, { weight: '', reps: '', rir: '2', restSec: '60', bodyweight: ex.plan.bodyweight ?? false }] }
+          : ex
       )
     );
+  };
+
+  const toggleBodyweight = (exIdx: number, setIdx: number) => {
+    setExercises((prev) =>
+      prev.map((ex, i) =>
+        i === exIdx
+          ? {
+              ...ex,
+              sets: ex.sets.map((s, j) =>
+                j === setIdx ? { ...s, bodyweight: !s.bodyweight, weight: s.bodyweight ? s.weight : '' } : s
+              ),
+            }
+          : ex
+      )
+    );
+  };
+
+  const toggleGuideItem = (key: 'warmup' | 'stretches', name: string) => {
+    const setter = key === 'warmup' ? setWarmup : setStretches;
+    setter((prev) => ({ ...prev, [name]: !prev[name] }));
   };
 
   const removeSet = (exIdx: number) => {
@@ -222,7 +268,7 @@ export default function WorkoutTodayPage() {
           sets: ex.sets
             .map((s, i) => ({
               setNumber: i + 1,
-              weightKg: Number(s.weight) || 0,
+              weightKg: s.bodyweight ? 0 : Number(s.weight) || 0,
               reps: Number(s.reps) || 0,
               rir: Number(s.rir) || 0,
               restSec: Number(s.restSec) || 60,
@@ -282,13 +328,15 @@ export default function WorkoutTodayPage() {
         <Card className="text-center py-10">
           <Dumbbell className="w-14 h-14 mx-auto text-slate-300 mb-3" />
           <p className="font-semibold text-lg">Hoy es día de descanso</p>
-          <p className="text-sm text-slate-500 mt-1">El programa entrena lunes, martes, jueves y viernes.</p>
+          <p className="text-sm text-slate-500 mt-1">El programa entrena lunes, miércoles y viernes.</p>
         </Card>
       </div>
     );
   }
 
   const totalSets = exercises.reduce((acc, ex) => acc + ex.sets.filter((s) => s.reps !== '').length, 0);
+  const warmupCount = WARMUP_EXERCISES.filter((w) => warmup[w.name]).length;
+  const stretchCount = STRETCH_EXERCISES.filter((s) => stretches[s.name]).length;
 
   return (
     <div className="space-y-4 animate-slide-up pb-24">
@@ -324,6 +372,58 @@ export default function WorkoutTodayPage() {
             <Dumbbell className="w-6 h-6" />
           </div>
         </div>
+      </Card>
+
+      {/* Calentamiento dinámico previo */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Flame className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">Calentamiento</h3>
+              <p className="text-[11px] text-slate-500">Dinámico · antes de entrenar · ~5 min</p>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+            {warmupCount}/{WARMUP_EXERCISES.length}
+          </span>
+        </div>
+        <div className="space-y-1.5 mt-3">
+          {WARMUP_EXERCISES.map((w) => {
+            const done = !!warmup[w.name];
+            return (
+              <button
+                key={w.name}
+                onClick={() => toggleGuideItem('warmup', w.name)}
+                className="w-full flex items-start gap-2.5 rounded-xl p-2.5 text-left transition-all active:scale-[0.99] touch-action-manipulation bg-slate-50 dark:bg-slate-800/60"
+              >
+                <div
+                  className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                    done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600'
+                  }`}
+                >
+                  {done && <CheckCircle2 className="w-4 h-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[13px] font-medium ${done ? 'text-slate-400 dark:text-slate-500 line-through' : ''}`}>
+                    {w.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                    {w.duration} · {w.hint}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {warmupCount === WARMUP_EXERCISES.length && warmupCount > 0 && (
+          <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+            <CheckCircle2 className="inline w-3.5 h-3.5 mr-1" />
+            Calentamiento completo. ¡A entrenar!
+          </p>
+        )}
       </Card>
 
       {/* Exercises - accordion style for mobile */}
@@ -410,28 +510,53 @@ export default function WorkoutTodayPage() {
                         {/* Weight */}
                         <div>
                           <label className="text-[10px] font-medium text-slate-500 mb-1 block">Peso (kg)</label>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => incrementField(exIdx, sIdx, 'weight', -2.5)}
-                              className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center active:bg-slate-300 dark:active:bg-slate-600"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </button>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              placeholder="0"
-                              value={s.weight}
-                              onChange={(e) => updateSet(exIdx, sIdx, 'weight', e.target.value)}
-                              className="flex-1 text-center !py-2"
-                            />
-                            <button
-                              onClick={() => incrementField(exIdx, sIdx, 'weight', 2.5)}
-                              className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center active:bg-slate-300 dark:active:bg-slate-600"
-                            >
-                              <Plus className="w-3 h-3" />
-                            </button>
-                          </div>
+                          {s.bodyweight ? (
+                            <div className="w-full rounded-lg bg-emerald-100 dark:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center justify-between px-2 min-h-[42px]">
+                              <span className="flex items-center gap-1.5 text-[11px] font-semibold">
+                                <CheckCircle2 className="w-4 h-4" /> Peso corporal
+                              </span>
+                              <button
+                                onClick={() => toggleBodyweight(exIdx, sIdx)}
+                                className="text-[10px] underline underline-offset-2"
+                                title="Registrar con carga en kg"
+                              >
+                                kg
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => incrementField(exIdx, sIdx, 'weight', -2.5)}
+                                  className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center active:bg-slate-300 dark:active:bg-slate-600"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <Input
+                                  type="number"
+                                  inputMode="decimal"
+                                  placeholder="0"
+                                  value={s.weight}
+                                  onChange={(e) => updateSet(exIdx, sIdx, 'weight', e.target.value)}
+                                  className="flex-1 text-center !py-2"
+                                />
+                                <button
+                                  onClick={() => incrementField(exIdx, sIdx, 'weight', 2.5)}
+                                  className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center active:bg-slate-300 dark:active:bg-slate-600"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                              {ex.plan.bodyweight && (
+                                <button
+                                  onClick={() => toggleBodyweight(exIdx, sIdx)}
+                                  className="mt-1 w-full text-[10px] font-medium text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 active:text-emerald-700 py-1 rounded-lg"
+                                >
+                                  Marcar como peso corporal
+                                </button>
+                              )}
+                            </>
+                          )}
                         </div>
                         {/* Reps */}
                         <div>
@@ -495,6 +620,58 @@ export default function WorkoutTodayPage() {
           </Card>
         );
       })}
+
+      {/* Estiramiento post-entreno */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Activity className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">Estiramiento post-entreno</h3>
+              <p className="text-[11px] text-slate-500">Estáticos · al terminar tu rutina</p>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+            {stretchCount}/{STRETCH_EXERCISES.length}
+          </span>
+        </div>
+        <div className="space-y-1.5 mt-3">
+          {STRETCH_EXERCISES.map((sItem) => {
+            const done = !!stretches[sItem.name];
+            return (
+              <button
+                key={sItem.name}
+                onClick={() => toggleGuideItem('stretches', sItem.name)}
+                className="w-full flex items-start gap-2.5 rounded-xl p-2.5 text-left transition-all active:scale-[0.99] touch-action-manipulation bg-slate-50 dark:bg-slate-800/60"
+              >
+                <div
+                  className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                    done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 dark:border-slate-600'
+                  }`}
+                >
+                  {done && <CheckCircle2 className="w-4 h-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[13px] font-medium ${done ? 'text-slate-400 dark:text-slate-500 line-through' : ''}`}>
+                    {sItem.name}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                    {sItem.duration} · {sItem.hint}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {stretchCount === STRETCH_EXERCISES.length && stretchCount > 0 && (
+          <p className="mt-3 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+            <CheckCircle2 className="inline w-3.5 h-3.5 mr-1" />
+            Estiramiento completo. ¡Excelente sesión!
+          </p>
+        )}
+      </Card>
 
       {/* Notes */}
       <Card>

@@ -35,6 +35,7 @@ export interface DraftPlanExercise {
   exerciseId: number | null;
   notes?: string | null;
   mediaUrl?: string | null;
+  bodyweight?: boolean;
 }
 
 export interface DraftSet {
@@ -42,6 +43,7 @@ export interface DraftSet {
   reps: string;
   rir: string;
   restSec: string;
+  bodyweight: boolean;
 }
 
 export interface DraftExercise {
@@ -56,6 +58,8 @@ export interface WorkoutDraft {
   duration: string;
   notes: string;
   exercises: DraftExercise[];
+  warmup?: Record<string, boolean>;
+  stretches?: Record<string, boolean>;
   savedAt: string;
 }
 

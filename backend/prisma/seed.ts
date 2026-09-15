@@ -13,39 +13,30 @@ type BasicIngredient = {
 };
 
 const programExercises = {
-  'Tren superior A': [
-    ['Press de banca con mancuernas', 'superior', 3, 6, 10],
-    ['Remo con mancuerna', 'superior', 3, 8, 12],
-    ['Dominadas / jalón asistido', 'superior', 3, 1, 20],
-    ['Press militar sentado', 'superior', 3, 8, 12],
-    ['Curl de bíceps', 'superior', 2, 10, 15],
-    ['Extensión de tríceps', 'superior', 2, 10, 15],
-    ['Plancha', 'core', 3, 30, 60],
+  Push: [
+    ['Flexiones de pecho (Push-ups)', 'empuje', 3, 8, 15],
+    ['Fondos en banco (Bench dips)', 'empuje', 3, 8, 15],
+    ['Press de banca plano con mancuernas', 'empuje', 3, 8, 12],
+    ['Press militar de pie con mancuernas', 'empuje', 3, 8, 12],
+    ['Elevaciones laterales con banda elástica', 'hombro', 3, 12, 20],
+    ['Extensión de tríceps con barra romana o banda', 'empuje', 2, 10, 15],
   ],
-  'Piernas A': [
-    ['Sentadilla goblet', 'piernas', 3, 8, 12],
-    ['Peso muerto rumano con mancuernas', 'piernas', 3, 8, 12],
-    ['Zancadas', 'piernas', 3, 8, 12],
-    ['Hip thrust con mancuerna', 'piernas', 3, 10, 15],
-    ['Elevación de pantorrillas', 'piernas', 3, 12, 20],
-    ['Dead bug', 'core', 3, 8, 12],
+  Pull: [
+    ['Remo horizontal con barra o mancuernas', 'tirón', 3, 8, 12],
+    ['Remo con banda elástica', 'tirón', 3, 12, 20],
+    ['Pullover con mancuerna en banco', 'tirón', 3, 10, 15],
+    ['Vuelos posteriores / Pájaro con mancuernas', 'tirón', 3, 12, 20],
+    ['Curl de bíceps con barra romana', 'tirón', 3, 10, 15],
+    ['Curl martillo con mancuernas', 'tirón', 2, 10, 15],
+    ['Plancha abdominal', 'core', 3, 30, 60],
   ],
-  'Tren superior B': [
-    ['Press inclinado con mancuernas', 'superior', 3, 8, 12],
-    ['Fondos en paralelas o banco', 'superior', 3, 8, 12],
-    ['Remo a una mano', 'superior', 3, 8, 12],
-    ['Elevaciones laterales', 'superior', 3, 12, 20],
-    ['Pájaros / rear delt fly', 'superior', 2, 12, 20],
-    ['Curl martillo', 'superior', 2, 10, 15],
-    ['Tríceps por encima de la cabeza', 'superior', 2, 10, 15],
-  ],
-  'Piernas B': [
-    ['Sentadilla búlgara', 'piernas', 3, 8, 12],
-    ['Peso muerto rumano', 'piernas', 3, 8, 12],
-    ['Step-up al banco', 'piernas', 3, 8, 12],
-    ['Hip thrust', 'piernas', 3, 10, 15],
-    ['Pantorrillas', 'piernas', 3, 12, 20],
-    ['Plancha lateral', 'core', 3, 30, 45],
+  Legs: [
+    ['Sentadilla libre (peso corporal)', 'piernas', 3, 10, 20],
+    ['Sentadilla Goblet con mancuerna', 'piernas', 3, 8, 12],
+    ['Peso muerto rumano con barra', 'piernas', 3, 8, 12],
+    ['Zancadas / Lunges alternadas', 'piernas', 3, 10, 20],
+    ['Hip thrust en banco', 'piernas', 3, 10, 15],
+    ['Elevación de talones de pie', 'piernas', 3, 12, 25],
   ],
 };
 
