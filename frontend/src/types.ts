@@ -170,6 +170,13 @@ export interface DashboardData {
   programDay: number;
   programTotal: number;
   programPct: number;
+  phaseNumber: number;
+  phaseName: string;
+  phaseWeek: number;
+  phaseWeeks: number;
+  phasePct: number;
+  weekWorkoutsDone: number;
+  weekWorkoutsTotal: number;
   currentWeight: number | null;
   weeklyAvgWeight: number | null;
   weightChange: number | null;

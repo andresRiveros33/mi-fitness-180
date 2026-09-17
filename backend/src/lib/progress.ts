@@ -106,6 +106,17 @@ export async function getDashboard(prisma: PrismaClient): Promise<DashboardData>
   };
 }
 
+const PHASE_DAYS = 30;
+const PHASE_WEEKS = 4;
+const PHASE_NAMES = [
+  'Acondicionamiento',
+  'Fuerza base',
+  'Consolidación',
+  'Progresión',
+  'Definición',
+  'Resultados',
+];
+
 export async function getProgramProgress(prisma: PrismaClient) {
   const profile = await prisma.userProfile.findFirst();
   const total = profile?.daysProgram ?? 180;
@@ -115,6 +126,22 @@ export async function getProgramProgress(prisma: PrismaClient) {
   const day = Math.max(1, Math.round((todayTime - startTime) / 86400000) + 1);
   const clamped = Math.min(Math.max(day, 1), total);
   const currentMonth = Math.min(6, Math.max(1, Math.ceil((clamped - 1) / 30) + 1));
+
+  // Fase semanal: cada fase dura 30 días (~4 semanas). Fase 1 = Acondicionamiento.
+  const phaseNumber = Math.min(PHASE_NAMES.length, Math.ceil(clamped / PHASE_DAYS));
+  const phaseIndex = phaseNumber - 1;
+  const phaseDay = clamped - phaseIndex * PHASE_DAYS;
+  const phaseWeek = Math.min(PHASE_WEEKS, Math.floor((phaseDay - 1) / 7) + 1);
+  const phasePct = Math.min(100, Math.round((phaseDay / PHASE_DAYS) * 100));
+
+  // Entrenamientos completados en la semana calendario actual (lunes a domingo)
+  const today = startOfDay(new Date());
+  const weekStart = addDays(today, -((today.getDay() + 6) % 7));
+  const nextWeek = addDays(weekStart, 7);
+  const weekWorkoutsDone = await prisma.workout.count({
+    where: { date: { gte: weekStart, lt: nextWeek } },
+  });
+
   return {
     day: clamped,
     total,
@@ -122,6 +149,13 @@ export async function getProgramProgress(prisma: PrismaClient) {
     currentMonth,
     startDate: start,
     daysRemaining: Math.max(0, total - clamped),
+    phaseNumber,
+    phaseName: PHASE_NAMES[phaseIndex],
+    phaseWeek,
+    phaseWeeks: PHASE_WEEKS,
+    phasePct,
+    weekWorkoutsDone,
+    weekWorkoutsTotal: 3,
   };
 }
 

@@ -73,20 +73,22 @@ export default function DashboardPage() {
     <div className="space-y-4 animate-slide-up pb-24">
       {/* Header */}
       <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-0">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-blue-100 text-sm">Día del programa</p>
-            <p className="text-4xl font-black leading-tight">
-              {data.programDay}<span className="text-lg font-semibold text-blue-200">/{data.programTotal}</span>
+            <p className="text-blue-100 text-sm">Fase {data.phaseNumber}: {data.phaseName}</p>
+            <p className="text-3xl font-black leading-tight mt-0.5">
+              Semana {data.phaseWeek}<span className="text-lg font-semibold text-blue-200"> de {data.phaseWeeks}</span>
             </p>
-            <p className="text-blue-100 text-xs mt-1">Mes {Math.min(6, Math.ceil(data.programDay / 30))} · {data.programPct}% completado</p>
+            <p className="text-blue-100 text-xs mt-1">
+              {data.weekWorkoutsDone} de {data.weekWorkoutsTotal} entrenamientos completados esta semana
+            </p>
           </div>
-          <div className="text-right">
-            <p className="text-blue-100 text-xs">Progreso</p>
+          <div className="text-right shrink-0">
+            <p className="text-blue-100 text-xs">Progreso de fase</p>
             <div className="w-24 mt-1">
-              <ProgressBar value={data.programDay} max={data.programTotal} color="green" showPct={false} />
+              <ProgressBar value={data.phasePct} max={100} color="green" showPct={false} />
             </div>
-            <p className="text-xs mt-1.5 text-blue-200">{data.daysRemaining} días restantes</p>
+            <p className="text-xs mt-1.5 text-blue-200">{data.phasePct}% de la fase</p>
           </div>
         </div>
       </Card>
