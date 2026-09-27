@@ -3,11 +3,12 @@
 // de modo que si la red o el servidor fallan jamás se pierde la información.
 
 import { api } from './api';
-import type { Meal, NutritionEntry } from '../types';
+import type { Meal, NutritionEntry, Workout } from '../types';
 
 const PENDING_KEY = 'mf180:pending';
 const nutritionSnapshotKey = (date: string) => `mf180:nutrition:snapshot:${date}`;
 const workoutDraftKey = (date: string) => `mf180:workout:draft:${date}`;
+const WORKOUT_HISTORY_KEY = 'mf180:workout:history';
 
 export type PendingKind = 'mealAdd' | 'waterUpdate' | 'workoutSave';
 
@@ -153,6 +154,23 @@ export function saveWorkoutDraft(date: string, draft: WorkoutDraft) {
 
 export function clearWorkoutDraft(date: string) {
   remove(workoutDraftKey(date));
+}
+
+// ---------------------------------------------------------------
+// Historial de entrenamientos (copia local del detalle de las sesiones)
+// ---------------------------------------------------------------
+
+export function getWorkoutHistory(): Workout[] | null {
+  return read<Workout[]>(WORKOUT_HISTORY_KEY);
+}
+
+export function saveWorkoutHistory(workouts: Workout[]) {
+  write(WORKOUT_HISTORY_KEY, workouts);
+}
+
+export function removeWorkoutFromHistory(id: number) {
+  const workouts = getWorkoutHistory();
+  if (workouts) saveWorkoutHistory(workouts.filter((w) => w.id !== id));
 }
 
 // ---------------------------------------------------------------

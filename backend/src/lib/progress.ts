@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { startOfDay, addDays, daysBetween, currentProgramDay, clampDay } from './calculations.js';
+import { CARDIO_DAY_NAMES, TRAINING_DAYS_PER_WEEK, getProgramDay } from './program.js';
 
 export interface DashboardData {
   programDay: number;
@@ -22,12 +23,11 @@ export interface DashboardData {
   nutritionLoggedToday: boolean;
 }
 
-// Push (Lunes), Pull (Miércoles), Legs (Viernes)
-const WORKOUT_SCHEDULE: Record<number, string> = {
-  1: 'Push',
-  3: 'Pull',
-  5: 'Legs',
-};
+// Torso A (Lunes), Pierna A (Martes), Cardio (Miércoles),
+// Torso B (Jueves), Pierna B (Viernes)
+function programWorkoutFor(dow: number): string | null {
+  return getProgramDay(dow)?.name ?? null;
+}
 
 export async function getDashboard(prisma: PrismaClient): Promise<DashboardData> {
   const profile = await prisma.userProfile.findFirst();
@@ -76,10 +76,12 @@ export async function getDashboard(prisma: PrismaClient): Promise<DashboardData>
   // Next workout: el día de entrenamiento que sigue (o de hoy si aún no se registró)
   const getNextWorkout = () => {
     const dow = today.getDay(); // 0 sun .. 6 sat
-    if (WORKOUT_SCHEDULE[dow] && !workout) return WORKOUT_SCHEDULE[dow];
+    const todaysName = programWorkoutFor(dow);
+    if (todaysName && !workout) return todaysName;
     for (let i = 1; i <= 7; i++) {
       const d = (dow + i) % 7;
-      if (WORKOUT_SCHEDULE[d]) return WORKOUT_SCHEDULE[d];
+      const name = programWorkoutFor(d);
+      if (name) return name;
     }
     return null;
   };
@@ -97,7 +99,7 @@ export async function getDashboard(prisma: PrismaClient): Promise<DashboardData>
     caloriesRemaining,
     proteinConsumed,
     proteinRemaining,
-    todaysWorkout: WORKOUT_SCHEDULE[today.getDay()] ?? null,
+    todaysWorkout: programWorkoutFor(today.getDay()),
     nextWorkout: getNextWorkout(),
     steps: activity?.steps ?? 0,
     waterMl: nutrition?.waterMl ?? 0,
@@ -134,12 +136,16 @@ export async function getProgramProgress(prisma: PrismaClient) {
   const phaseWeek = Math.min(PHASE_WEEKS, Math.floor((phaseDay - 1) / 7) + 1);
   const phasePct = Math.min(100, Math.round((phaseDay / PHASE_DAYS) * 100));
 
-  // Entrenamientos completados en la semana calendario actual (lunes a domingo)
+  // Entrenamientos completados en la semana calendario actual (lunes a domingo).
+  // El cardio del miércoles no cuenta para la meta de 4 días de fuerza.
   const today = startOfDay(new Date());
   const weekStart = addDays(today, -((today.getDay() + 6) % 7));
   const nextWeek = addDays(weekStart, 7);
   const weekWorkoutsDone = await prisma.workout.count({
-    where: { date: { gte: weekStart, lt: nextWeek } },
+    where: {
+      date: { gte: weekStart, lt: nextWeek },
+      name: { notIn: CARDIO_DAY_NAMES },
+    },
   });
 
   return {
@@ -155,7 +161,7 @@ export async function getProgramProgress(prisma: PrismaClient) {
     phaseWeeks: PHASE_WEEKS,
     phasePct,
     weekWorkoutsDone,
-    weekWorkoutsTotal: 3,
+    weekWorkoutsTotal: TRAINING_DAYS_PER_WEEK,
   };
 }
 

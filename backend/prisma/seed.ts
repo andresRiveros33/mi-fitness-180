@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import basicIngredients from '../../frontend/src/data/basicIngredients.json';
+import { PROGRAM } from '../src/lib/program.js';
 
 const prisma = new PrismaClient();
 
@@ -12,33 +13,10 @@ type BasicIngredient = {
   fiber: number;
 };
 
-const programExercises = {
-  Push: [
-    ['Flexiones de pecho (Push-ups)', 'empuje', 3, 8, 15],
-    ['Fondos en banco (Bench dips)', 'empuje', 3, 8, 15],
-    ['Press de banca plano con mancuernas', 'empuje', 3, 8, 12],
-    ['Press militar de pie con mancuernas', 'empuje', 3, 8, 12],
-    ['Elevaciones laterales con banda elástica', 'hombro', 3, 12, 20],
-    ['Extensión de tríceps con barra romana o banda', 'empuje', 2, 10, 15],
-  ],
-  Pull: [
-    ['Remo horizontal con barra o mancuernas', 'tirón', 3, 8, 12],
-    ['Remo con banda elástica', 'tirón', 3, 12, 20],
-    ['Pullover con mancuerna en banco', 'tirón', 3, 10, 15],
-    ['Vuelos posteriores / Pájaro con mancuernas', 'tirón', 3, 12, 20],
-    ['Curl de bíceps con barra romana', 'tirón', 3, 10, 15],
-    ['Curl martillo con mancuernas', 'tirón', 2, 10, 15],
-    ['Plancha abdominal', 'core', 3, 30, 60],
-  ],
-  Legs: [
-    ['Sentadilla libre (peso corporal)', 'piernas', 3, 10, 20],
-    ['Sentadilla Goblet con mancuerna', 'piernas', 3, 8, 12],
-    ['Peso muerto rumano con barra', 'piernas', 3, 8, 12],
-    ['Zancadas / Lunges alternadas', 'piernas', 3, 10, 20],
-    ['Hip thrust en banco', 'piernas', 3, 10, 15],
-    ['Elevación de talones de pie', 'piernas', 3, 12, 25],
-  ],
-};
+// Ejercicios del programa vigente (4 días Torso / Pierna).
+const programExercises = PROGRAM.flatMap((day) =>
+  day.exercises.map((ex) => [ex.name, ex.category ?? 'general'] as const)
+);
 
 const monthlyGoals = [
   {
@@ -117,18 +95,33 @@ async function main() {
     console.log('✅ Peso inicial registrado');
   }
 
-  // 3. Exercise program
-  const count = await prisma.exercise.count();
-  if (count === 0) {
-    for (const [workoutName, exercises] of Object.entries(programExercises)) {
-      for (const [name, category] of exercises) {
-        await prisma.exercise.create({
-          data: { name, category, isProgram: true },
-        });
-      }
+  // 3. Programa de ejercicios: crea los faltantes y renombra los que cambiaron
+  //    de nomenclatura, de modo que el historial ya registrado no se parta.
+  const plansByName = new Map(PROGRAM.flatMap((d) => d.exercises).map((ex) => [ex.name, ex]));
+  let createdExercises = 0;
+  let renamedExercises = 0;
+  for (const [name, category] of programExercises) {
+    if (await prisma.exercise.findFirst({ where: { name } })) continue;
+
+    const aliases = plansByName.get(name)?.aliases ?? [];
+    const renamed = aliases.length
+      ? await prisma.exercise.findFirst({ where: { name: { in: aliases } } })
+      : null;
+    if (renamed) {
+      await prisma.exercise.update({
+        where: { id: renamed.id },
+        data: { name, category, isProgram: true },
+      });
+      renamedExercises++;
+      continue;
     }
-    console.log(`✅ ${Object.values(programExercises).flat().length} ejercicios creados`);
+
+    await prisma.exercise.create({ data: { name, category, isProgram: true } });
+    createdExercises++;
   }
+  console.log(
+    `✅ Ejercicios del programa al día · ${createdExercises} creados · ${renamedExercises} renombrados · ${programExercises.length} en total`
+  );
 
   // 4. Monthly goals
   const goalCount = await prisma.monthlyGoal.count();

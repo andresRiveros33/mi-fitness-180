@@ -44,6 +44,19 @@ interface LocalExercise {
   sets: LocalSet[];
 }
 
+// La unidad del plan define cómo se etiqueta la columna de repeticiones.
+const UNIT_LABEL: Record<string, string> = { reps: 'Reps', min: 'Min', seg: 'Seg' };
+
+function unitLabel(unit: string | undefined): string {
+  return UNIT_LABEL[unit ?? 'reps'] ?? 'Reps';
+}
+
+function unitSuffix(unit: string | undefined): string {
+  if (unit === 'min') return ' min';
+  if (unit === 'seg') return ' s';
+  return '';
+}
+
 export default function WorkoutTodayPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -115,8 +128,10 @@ export default function WorkoutTodayPage() {
         }));
         setExercises(loaded);
       } else if (found && !selectedDay) {
-        // Los ejercicios ya registrados conservan su marca de peso corporal según el plan.
-        const bodyweightByName = new Map(res.exercises.map((p) => [p.name, p.bodyweight ?? false]));
+        // Los ejercicios ya registrados conservan su marca de peso corporal y su
+        // unidad (reps / segundos / minutos) según el plan vigente.
+        const planByName = new Map(res.exercises.map((p) => [p.name, p]));
+        const isBodyweight = (name: string) => planByName.get(name)?.bodyweight ?? false;
         setExisting(true);
         setDuration(String(found.durationMin ?? 45));
         setNotes(found.notes ?? '');
@@ -128,16 +143,16 @@ export default function WorkoutTodayPage() {
             targetSets: we.sets.length,
             min: 6,
             max: 12,
-            unit: 'reps',
+            unit: planByName.get(we.exercise.name)?.unit ?? 'reps',
             exerciseId: we.exerciseId,
-            bodyweight: bodyweightByName.get(we.exercise.name) ?? false,
+            bodyweight: isBodyweight(we.exercise.name),
           },
           sets: we.sets.map((s: any) => ({
             weight: String(s.weightKg ?? ''),
             reps: String(s.reps ?? ''),
             rir: String(s.rir ?? ''),
             restSec: String(s.restSec ?? '60'),
-            bodyweight: bodyweightByName.get(we.exercise.name) ?? false,
+            bodyweight: isBodyweight(we.exercise.name),
           })),
         }));
         setExercises(loaded);
@@ -328,7 +343,10 @@ export default function WorkoutTodayPage() {
         <Card className="text-center py-10">
           <Dumbbell className="w-14 h-14 mx-auto text-slate-300 mb-3" />
           <p className="font-semibold text-lg">Hoy es día de descanso</p>
-          <p className="text-sm text-slate-500 mt-1">El programa entrena lunes, miércoles y viernes.</p>
+          <p className="text-sm text-slate-500 mt-1">
+            El programa entrena de lunes a viernes (Torso / Pierna). El fin de semana es de
+            descanso.
+          </p>
         </Card>
       </div>
     );
@@ -449,7 +467,9 @@ export default function WorkoutTodayPage() {
                 <div className="text-left">
                   <p className="font-semibold text-sm">{ex.plan.name}</p>
                   <p className="text-[11px] text-slate-500">
-                    {completedSets > 0 ? 'En progreso' : `Objetivo: ${ex.plan.targetSets} × ${ex.plan.min}-${ex.plan.max}`}
+                    {completedSets > 0
+                      ? 'En progreso'
+                      : `Objetivo: ${ex.plan.targetSets} × ${ex.plan.min}-${ex.plan.max}${unitSuffix(ex.plan.unit)}`}
                   </p>
                 </div>
               </div>
@@ -560,7 +580,9 @@ export default function WorkoutTodayPage() {
                         </div>
                         {/* Reps */}
                         <div>
-                          <label className="text-[10px] font-medium text-slate-500 mb-1 block">Reps</label>
+                          <label className="text-[10px] font-medium text-slate-500 mb-1 block">
+                            {unitLabel(ex.plan.unit)}
+                          </label>
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => incrementField(exIdx, sIdx, 'reps', -1)}

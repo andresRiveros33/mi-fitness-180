@@ -9,7 +9,6 @@ import {
   Trash2,
   Sparkles,
   GlassWater,
-  X,
   Search,
 } from 'lucide-react';
 import { api, formatNumber, todayISO } from '../lib/api';
@@ -30,6 +29,7 @@ import { Button } from '../components/Button';
 import { Field, Input, Select } from '../components/Input';
 import { ProgressBar } from '../components/ProgressBar';
 import { PageHeader } from '../components/AppLayout';
+import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 
 const MEAL_NAMES = ['Desayuno', 'Almuerzo', 'Cena', 'Merienda'] as const;
@@ -1013,25 +1013,6 @@ export default function NutritionPage() {
           )}
         </Modal>
       )}
-    </div>
-  );
-}
-
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-slate-900 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto bottom-sheet"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div className="w-10 h-1 bg-slate-300 dark:bg-slate-600 rounded-full sm:hidden mx-auto" />
-        </div>
-        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
-          <X className="w-5 h-5" />
-        </button>
-        {children}
-      </div>
     </div>
   );
 }
