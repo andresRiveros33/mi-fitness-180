@@ -32,6 +32,7 @@ const MEDIA: Record<string, string> = {
   'Fondos en banco (Bench dips)': 'Bench_Dips',
   'Zancadas estáticas en sitio': 'Dumbbell_Rear_Lunge',
   'Elevación de piernas en banco (abdomen)': 'Flat_Bench_Lying_Leg_Raise',
+  'Plancha abdominal': 'Plank',
   'Bicicleta estática (cardio suave)': 'Air_Bike',
   'Caminata rápida': 'Jogging_Treadmill',
 };
@@ -43,8 +44,9 @@ export interface ExerciseMedia {
 }
 
 /**
- * Fotogramas de la demostración de un ejercicio, o `null` si no hay una imagen
- * aplicable (por ejemplo la plancha, que no tiene equivalente en el catálogo).
+ * Fotogramas de la demostración de un ejercicio, o `null` si el ejercicio no
+ * tiene imagen mapeada. La guía técnica muestra en ese caso una imagen estática
+ * genérica con la indicación de técnica, así que nunca queda un hueco vacío.
  */
 export function getExerciseMedia(name: string): ExerciseMedia | null {
   const slug = MEDIA[name];

@@ -25,6 +25,9 @@ model UserProfile {
   primaryGoal       String    @default("perder grasa y ganar/mantener músculo")
   startDate         DateTime  @default(now())
   daysProgram       Int       @default(180)
+  // Arranque del bloque de fase actual (Fase 2). Es independiente de startDate:
+  // reiniciar la fase no toca el día del programa de 180 días.
+  phaseStartDate    DateTime  @default(now())
   calorieTarget     Int       @default(1850)
   proteinTarget     Int       @default(145)
   fatMinTarget      Int       @default(55)

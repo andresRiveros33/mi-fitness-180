@@ -9,6 +9,7 @@ export interface UserProfile {
   primaryGoal: string;
   startDate: string;
   daysProgram: number;
+  phaseStartDate: string;
   calorieTarget: number;
   proteinTarget: number;
   fatMinTarget: number;
@@ -172,6 +173,7 @@ export interface DashboardData {
   programPct: number;
   phaseNumber: number;
   phaseName: string;
+  phaseStartDate: string;
   phaseWeek: number;
   phaseWeeks: number;
   phasePct: number;

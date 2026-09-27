@@ -39,6 +39,7 @@ export default function SettingsPage() {
         trainingLevel: profile.trainingLevel,
         primaryGoal: profile.primaryGoal,
         startDate: profile.startDate,
+        phaseStartDate: profile.phaseStartDate,
         calorieTarget: Number(profile.calorieTarget),
         proteinTarget: Number(profile.proteinTarget),
         fatMinTarget: Number(profile.fatMinTarget),
@@ -127,6 +128,27 @@ export default function SettingsPage() {
           </Field>
           <p className="text-[10px] text-slate-500">
             Cambia esta fecha para corregir el conteo de días del programa. El día 1 es el día de inicio.
+          </p>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Fase actual"
+          subtitle="Reinicia el contador de semanas del bloque de hipertrofia"
+        />
+        <div className="space-y-3">
+          <Field label="Inicio de la fase">
+            <Input
+              type="date"
+              value={profile.phaseStartDate ? profile.phaseStartDate.slice(0, 10) : ''}
+              onChange={(e) => update('phaseStartDate', e.target.value)}
+            />
+          </Field>
+          <p className="text-[10px] text-slate-500">
+            Pon aquí la fecha en la que empezaste la fase actual para que el contador marque
+            &ldquo;Semana 1&rdquo; y el progreso de fase arranque en cero. No afecta al día del
+            programa de 180 días.
           </p>
         </div>
       </Card>

@@ -9,6 +9,7 @@ export const profileSchema = z.object({
   trainingLevel: z.enum(['bajo', 'moderado', 'alto']),
   primaryGoal: z.string().min(3).max(200),
   startDate: z.string().optional(),
+  phaseStartDate: z.string().optional(),
   calorieTarget: z.number().min(800).max(5000),
   proteinTarget: z.number().min(30).max(400),
   fatMinTarget: z.number().min(10).max(200),

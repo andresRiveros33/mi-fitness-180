@@ -108,16 +108,15 @@ export async function getDashboard(prisma: PrismaClient): Promise<DashboardData>
   };
 }
 
-const PHASE_DAYS = 30;
-const PHASE_WEEKS = 4;
-const PHASE_NAMES = [
-  'Acondicionamiento',
-  'Fuerza base',
-  'Consolidación',
-  'Progresión',
-  'Definición',
-  'Resultados',
-];
+// Bloque de fase activo. El nombre y la duración son parte del diseño del
+// programa (código); la fecha de arranque vive en el perfil para poder reiniciar
+// el contador de semanas sin desplegar ni tocar el día del programa de 180 días.
+const ACTIVE_PHASE = {
+  number: 2,
+  name: 'Hipertrofia y Recomposición (Torso / Pierna)',
+  weeks: 12,
+};
+const PHASE_DAYS = ACTIVE_PHASE.weeks * 7;
 
 export async function getProgramProgress(prisma: PrismaClient) {
   const profile = await prisma.userProfile.findFirst();
@@ -129,21 +128,27 @@ export async function getProgramProgress(prisma: PrismaClient) {
   const clamped = Math.min(Math.max(day, 1), total);
   const currentMonth = Math.min(6, Math.max(1, Math.ceil((clamped - 1) / 30) + 1));
 
-  // Fase semanal: cada fase dura 30 días (~4 semanas). Fase 1 = Acondicionamiento.
-  const phaseNumber = Math.min(PHASE_NAMES.length, Math.ceil(clamped / PHASE_DAYS));
-  const phaseIndex = phaseNumber - 1;
-  const phaseDay = clamped - phaseIndex * PHASE_DAYS;
-  const phaseWeek = Math.min(PHASE_WEEKS, Math.floor((phaseDay - 1) / 7) + 1);
-  const phasePct = Math.min(100, Math.round((phaseDay / PHASE_DAYS) * 100));
+  // Fase: arranca en phaseStartDate y dura ACTIVE_PHASE.weeks semanas.
+  const phaseStart = startOfDay(profile?.phaseStartDate ?? new Date());
+  const phaseStartTime = phaseStart.getTime();
+  const phaseDay = Math.min(Math.max(Math.round((todayTime - phaseStartTime) / 86400000) + 1, 1), PHASE_DAYS);
+  const phaseWeek = Math.min(ACTIVE_PHASE.weeks, Math.floor((phaseDay - 1) / 7) + 1);
+  // Porcentaje de días completados con redondeo a la baja: el día 1 de la fase
+  // marca 0% (el bloque arranca claramente en cero) y el último día marca 100%.
+  const phasePct =
+    phaseDay >= PHASE_DAYS ? 100 : Math.floor(((phaseDay - 1) / PHASE_DAYS) * 100);
 
-  // Entrenamientos completados en la semana calendario actual (lunes a domingo).
+  // Entrenamientos completados en la semana calendario actual (lunes a domingo),
+  // contados solo desde el arranque de la fase: el progreso del bloque empieza
+  // en cero aunque la semana en curso arranquera con días del programa anterior.
   // El cardio del miércoles no cuenta para la meta de 4 días de fuerza.
   const today = startOfDay(new Date());
   const weekStart = addDays(today, -((today.getDay() + 6) % 7));
+  const countFrom = new Date(Math.max(weekStart.getTime(), phaseStartTime));
   const nextWeek = addDays(weekStart, 7);
   const weekWorkoutsDone = await prisma.workout.count({
     where: {
-      date: { gte: weekStart, lt: nextWeek },
+      date: { gte: countFrom, lt: nextWeek },
       name: { notIn: CARDIO_DAY_NAMES },
     },
   });
@@ -155,10 +160,11 @@ export async function getProgramProgress(prisma: PrismaClient) {
     currentMonth,
     startDate: start,
     daysRemaining: Math.max(0, total - clamped),
-    phaseNumber,
-    phaseName: PHASE_NAMES[phaseIndex],
+    phaseNumber: ACTIVE_PHASE.number,
+    phaseName: ACTIVE_PHASE.name,
+    phaseStartDate: phaseStart,
     phaseWeek,
-    phaseWeeks: PHASE_WEEKS,
+    phaseWeeks: ACTIVE_PHASE.weeks,
     phasePct,
     weekWorkoutsDone,
     weekWorkoutsTotal: TRAINING_DAYS_PER_WEEK,
