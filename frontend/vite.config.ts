@@ -66,7 +66,9 @@ export default defineConfig({
             options: {
               cacheName: 'images-cache',
               expiration: {
-                maxEntries: 50,
+                // Incluye los fotogramas de la guía técnica de cada ejercicio,
+                // que se sirven desde un CDN externo.
+                maxEntries: 120,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
             },

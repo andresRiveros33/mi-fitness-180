@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Save, ArrowLeft, Dumbbell, CheckCircle2, Minus, Timer, Info, ExternalLink, AlertCircle, RefreshCw, Flame, Activity } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Dumbbell, CheckCircle2, Minus, Timer, Info, ExternalLink, AlertCircle, RefreshCw, Flame, Activity, Eye, ChevronDown } from 'lucide-react';
 import { api, todayISO } from '../lib/api';
 import { WARMUP_EXERCISES, STRETCH_EXERCISES } from '../data/workoutGuide';
 import {
@@ -17,6 +17,7 @@ import type { Exercise } from '../types';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
+import { ExerciseTechniqueModal } from '../components/ExerciseTechniqueModal';
 import { useToast } from '../components/Toast';
 
 interface PlanExercise {
@@ -73,6 +74,8 @@ export default function WorkoutTodayPage() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [expandedExercise, setExpandedExercise] = useState<number | null>(0);
+  // Ejercicio cuya guía técnica está abierta (null = ninguna).
+  const [techniqueIdx, setTechniqueIdx] = useState<number | null>(null);
 
   const selectedDay = searchParams.get('day');
 
@@ -131,30 +134,37 @@ export default function WorkoutTodayPage() {
         // Los ejercicios ya registrados conservan su marca de peso corporal y su
         // unidad (reps / segundos / minutos) según el plan vigente.
         const planByName = new Map(res.exercises.map((p) => [p.name, p]));
-        const isBodyweight = (name: string) => planByName.get(name)?.bodyweight ?? false;
         setExisting(true);
         setDuration(String(found.durationMin ?? 45));
         setNotes(found.notes ?? '');
         setWarmup({});
         setStretches({});
-        const loaded: LocalExercise[] = found.exercises.map((we: any) => ({
-          plan: {
-            name: we.exercise.name,
-            targetSets: we.sets.length,
-            min: 6,
-            max: 12,
-            unit: planByName.get(we.exercise.name)?.unit ?? 'reps',
-            exerciseId: we.exerciseId,
-            bodyweight: isBodyweight(we.exercise.name),
-          },
-          sets: we.sets.map((s: any) => ({
-            weight: String(s.weightKg ?? ''),
-            reps: String(s.reps ?? ''),
-            rir: String(s.rir ?? ''),
-            restSec: String(s.restSec ?? '60'),
-            bodyweight: isBodyweight(we.exercise.name),
-          })),
-        }));
+        const loaded: LocalExercise[] = found.exercises.map((we: any) => {
+          const name: string = we.exercise.name;
+          // La técnica vive en el plan vigente, no en la sesión guardada: se
+          // recupera por nombre para que la guía siga disponible al reabrir.
+          const planned = planByName.get(name);
+          return {
+            plan: {
+              name,
+              targetSets: we.sets.length,
+              min: 6,
+              max: 12,
+              unit: planned?.unit ?? 'reps',
+              exerciseId: we.exerciseId,
+              notes: planned?.notes ?? null,
+              mediaUrl: planned?.mediaUrl ?? null,
+              bodyweight: planned?.bodyweight ?? false,
+            },
+            sets: we.sets.map((s: any) => ({
+              weight: String(s.weightKg ?? ''),
+              reps: String(s.reps ?? ''),
+              rir: String(s.rir ?? ''),
+              restSec: String(s.restSec ?? '60'),
+              bodyweight: planned?.bodyweight ?? false,
+            })),
+          };
+        });
         setExercises(loaded);
       } else {
         setExisting(false);
@@ -452,19 +462,19 @@ export default function WorkoutTodayPage() {
         return (
           <Card key={ex.plan.name} className="overflow-hidden">
             {/* Exercise header - tap to expand */}
-            <button
-              onClick={() => setExpandedExercise(isExpanded ? null : exIdx)}
-              className="w-full flex items-center justify-between -m-4 p-4 touch-action-manipulation"
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
+            <div className="-m-4 p-4 flex items-center gap-1">
+              <button
+                onClick={() => setExpandedExercise(isExpanded ? null : exIdx)}
+                className="flex-1 min-w-0 flex items-center gap-3 text-left touch-action-manipulation"
+              >
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
                   completedSets > 0
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
                     : 'bg-slate-100 text-slate-500 dark:bg-slate-800'
                 }`}>
                   {completedSets > 0 ? `${completedSets}/${ex.sets.length}` : exIdx + 1}
                 </div>
-                <div className="text-left">
+                <div className="text-left min-w-0">
                   <p className="font-semibold text-sm">{ex.plan.name}</p>
                   <p className="text-[11px] text-slate-500">
                     {completedSets > 0
@@ -472,13 +482,24 @@ export default function WorkoutTodayPage() {
                       : `Objetivo: ${ex.plan.targetSets} × ${ex.plan.min}-${ex.plan.max}${unitSuffix(ex.plan.unit)}`}
                   </p>
                 </div>
-              </div>
-              <div className={`w-6 h-6 flex items-center justify-center transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
-                <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </button>
+              </button>
+              <button
+                onClick={() => setTechniqueIdx(exIdx)}
+                aria-label={`Ver técnica de ${ex.plan.name}`}
+                title="Ver técnica"
+                className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 active:scale-[0.95] touch-action-manipulation"
+              >
+                <Eye className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setExpandedExercise(isExpanded ? null : exIdx)}
+                aria-label={isExpanded ? 'Ocultar series' : 'Ver series'}
+                aria-expanded={isExpanded}
+                className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-slate-400 active:bg-slate-100 dark:active:bg-slate-800 touch-action-manipulation"
+              >
+                <ChevronDown className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
 
             {/* Expanded sets */}
             {isExpanded && (
@@ -642,6 +663,15 @@ export default function WorkoutTodayPage() {
           </Card>
         );
       })}
+
+      {/* Guía técnica del ejercicio */}
+      {techniqueIdx !== null && exercises[techniqueIdx] && (
+        <ExerciseTechniqueModal
+          name={exercises[techniqueIdx].plan.name}
+          notes={exercises[techniqueIdx].plan.notes}
+          onClose={() => setTechniqueIdx(null)}
+        />
+      )}
 
       {/* Estiramiento post-entreno */}
       <Card>
