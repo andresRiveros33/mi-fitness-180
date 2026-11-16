@@ -161,6 +161,49 @@ export interface MonthlyGoal {
   goals: string[];
 }
 
+export interface StreakWeekDay {
+  dow: number;
+  name: string;
+  completed: boolean;
+  date: string;
+}
+
+export interface SessionBadge {
+  id: string;
+  title: string;
+  message: string;
+  emoji: string;
+  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
+}
+
+export interface WeeklyStreakView {
+  weekStart: string;
+  weekEnd: string;
+  sessionsCompleted: number;
+  sessionsTarget: number;
+  completed: boolean;
+  completedAt: string | null;
+  streakAfter: number;
+  isCurrent: boolean;
+}
+
+export interface StreakStatus {
+  weekStart: string;
+  weekEnd: string;
+  sessionsCompleted: number;
+  sessionsTarget: number;
+  weekCompleted: boolean;
+  currentStreak: number;
+  bestStreak: number;
+  isInvicto: boolean;
+  totalWorkouts: number;
+  weeksCompleted: number;
+  weekDays: StreakWeekDay[];
+  history: WeeklyStreakView[];
+  badge: SessionBadge;
+  motivation: { title: string; message: string };
+}
+
 export interface DashboardData {
   day: number;
   total: number;
@@ -194,6 +237,7 @@ export interface DashboardData {
   waterMl: number;
   workoutDoneToday: boolean;
   nutritionLoggedToday: boolean;
+  streak?: StreakStatus;
 }
 
 export interface Recommendation {

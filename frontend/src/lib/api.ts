@@ -1,4 +1,6 @@
-const API_BASE = 'https://mi-fitness-180.onrender.com/api';
+const API_BASE =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? '/api' : 'https://mi-fitness-180.onrender.com/api');
 const REQUEST_TIMEOUT_MS = 25000;
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Dumbbell, ChevronRight, Calendar, Trash2, TrendingUp, Clock, Layers, Weight, Gauge, Timer, StickyNote, Bike, ChevronDown } from 'lucide-react';
+import { Dumbbell, ChevronRight, Calendar, Trash2, TrendingUp, Clock, Layers, Weight, Gauge, Timer, StickyNote, ChevronDown, Flame, ShieldCheck, Trophy } from 'lucide-react';
 import { api, formatDate, formatNumber } from '../lib/api';
 import {
   getWorkoutHistory,
   removeWorkoutFromHistory,
   saveWorkoutHistory,
 } from '../lib/offlineStore';
-import type { Workout } from '../types';
+import type { StreakStatus, Workout } from '../types';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
 import { Modal } from '../components/Modal';
@@ -70,6 +70,7 @@ export default function WorkoutPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [history, setHistory] = useState<ExerciseHistory[]>([]);
   const [week, setWeek] = useState<WeekProgram | null>(null);
+  const [streak, setStreak] = useState<StreakStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'programa' | 'historial' | 'progresion'>('programa');
   const [openDay, setOpenDay] = useState<number | null>(null);
@@ -81,14 +82,16 @@ export default function WorkoutPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [w, h, p] = await Promise.all([
+      const [w, h, p, s] = await Promise.all([
         api.get<Workout[]>('/workouts'),
         api.get<ExerciseHistory[]>('/workouts/history/exercises'),
         api.get<WeekProgram>('/workouts/plan/week'),
+        api.get<StreakStatus>('/stats/streak').catch(() => null),
       ]);
       setWorkouts(w);
       setHistory(h);
       setWeek(p);
+      setStreak(s);
       setOffline(false);
       // Copia local para poder abrir el detalle sin conexión.
       saveWorkoutHistory(w);
@@ -193,12 +196,40 @@ export default function WorkoutPage() {
         ))}
       </div>
 
+      {streak && (
+        <Card className="bg-gradient-to-r from-orange-500 to-amber-500 text-white border-0">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Flame className="w-6 h-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-orange-100">Racha semanal</p>
+              <p className="text-lg font-black leading-tight">
+                {streak.sessionsCompleted}/{streak.sessionsTarget} entrenamientos
+                {streak.isInvicto && (
+                  <span className="ml-2 inline-flex items-center gap-1 align-middle rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold">
+                    <ShieldCheck className="w-3 h-3" /> Invicto
+                  </span>
+                )}
+              </p>
+              <p className="text-[11px] text-orange-100 truncate">{streak.motivation.title}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[10px] text-orange-100">Récord</p>
+              <p className="text-lg font-black flex items-center gap-1">
+                <Trophy className="w-4 h-4 text-amber-200" /> {streak.bestStreak}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Program */}
       {activeTab === 'programa' && (
         <Card>
           <CardHeader
             title="Programa semanal"
-            subtitle={`${week?.trainingDays ?? 4} días · Torso / Pierna`}
+            subtitle={`${week?.trainingDays ?? 3} días · Acondicionamiento Base`}
           />
           {!week ? (
             <p className="text-center text-sm text-slate-400 py-6">No se pudo cargar el programa</p>
@@ -206,7 +237,7 @@ export default function WorkoutPage() {
             <div className="space-y-2">
               {week.days.map((d) => {
                 const isOpen = openDay === d.dow;
-                const Icon = d.cardio ? Bike : Dumbbell;
+                const Icon = Dumbbell;
                 return (
                   <div
                     key={d.name}
@@ -274,7 +305,7 @@ export default function WorkoutPage() {
                 );
               })}
               <p className="text-[11px] text-slate-400 text-center pt-1">
-                Sábado y domingo: descanso. Miércoles: descanso activo (cardio).
+                Lunes, miércoles y viernes: Día A, B y C. Martes, jueves, sábado y domingo: descanso o caminata suave.
               </p>
             </div>
           )}

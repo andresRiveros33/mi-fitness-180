@@ -6,8 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // ---------------------------------------------------------------
@@ -203,7 +204,7 @@ model WorkoutExercise {
   exerciseId   Int
   order        Int          @default(1)
   exercise     Exercise     @relation(fields: [exerciseId], references: [id])
-  workout      Workout      @relation(fields: [workoutId], references: [id])
+  workout      Workout      @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   sets         WorkoutSet[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -220,7 +221,7 @@ model WorkoutSet {
   rir           Int
   restSec       Int            @default(60)
   notes         String?
-  workoutExercise WorkoutExercise @relation(fields: [workoutExerciseId], references: [id])
+  workoutExercise WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
@@ -250,6 +251,35 @@ model MonthlyGoal {
   goals       String   // JSON array or text lines
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------
+// Gamification: weekly streaks (Duolingo style)
+// ---------------------------------------------------------------
+
+model WeeklyStreak {
+  id                Int       @id @default(autoincrement())
+  weekStart         DateTime  @unique
+  weekEnd           DateTime
+  sessionsCompleted Int       @default(0)
+  sessionsTarget    Int       @default(3)
+  completed         Boolean   @default(false)
+  completedAt       DateTime?
+  streakAfter       Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([weekStart])
+}
+
+model StreakProgress {
+  id                Int       @id @default(autoincrement())
+  currentWeekStreak Int       @default(0)
+  bestWeekStreak    Int       @default(0)
+  totalWorkouts     Int       @default(0)
+  lastWeekStart     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 // ---------------------------------------------------------------

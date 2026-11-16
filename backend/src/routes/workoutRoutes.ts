@@ -9,6 +9,7 @@ import {
   getProgramDay,
   type ExercisePlan,
 } from '../lib/program.js';
+import { refreshStreakProgress } from '../lib/streaks.js';
 
 const router = Router();
 
@@ -69,7 +70,7 @@ async function resolveExerciseId(ex: { exerciseId: number; name?: string }): Pro
 router.post('/', async (req, res) => {
   try {
     const data = workoutSchema.parse(req.body);
-    const date = startOfDay(new Date(data.date));
+    const date = startOfDay(data.date);
     const existing = await prisma.workout.findUnique({ where: { date } });
 
     const mapExercises = async () =>
@@ -97,7 +98,8 @@ router.post('/', async (req, res) => {
         include: { exercises: { include: { sets: true, exercise: true } } },
       });
       await recomputeNutritionFromWorkout(date);
-      res.json(related);
+      const streak = await safeRefreshStreak();
+      res.json({ ...related, streak });
       return;
     }
 
@@ -113,7 +115,8 @@ router.post('/', async (req, res) => {
       },
       include: { exercises: { include: { sets: true, exercise: true } } },
     });
-    res.json(workout);
+    const streak = await safeRefreshStreak();
+    res.json({ ...workout, streak });
   } catch (e) {
     console.error('POST /workouts', (e as Error).message);
     res.status(400).json({ error: (e as Error).message });
@@ -124,11 +127,21 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = idParamSchema.parse(req.params);
     await prisma.workout.delete({ where: { id } });
-    res.json({ ok: true });
+    const streak = await safeRefreshStreak();
+    res.json({ ok: true, streak });
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
   }
 });
+
+async function safeRefreshStreak() {
+  try {
+    return await refreshStreakProgress(prisma);
+  } catch (e) {
+    console.error('Racha semanal', (e as Error).message);
+    return null;
+  }
+}
 
 function planToExercises(plan: ExercisePlan[], dbExercises: Array<{ id: number; name: string }>) {
   return plan.map((p) => {

@@ -23,8 +23,7 @@ export interface DashboardData {
   nutritionLoggedToday: boolean;
 }
 
-// Torso A (Lunes), Pierna A (Martes), Cardio (Miércoles),
-// Torso B (Jueves), Pierna B (Viernes)
+// Día A (Lunes), Día B (Miércoles), Día C (Viernes)
 function programWorkoutFor(dow: number): string | null {
   return getProgramDay(dow)?.name ?? null;
 }
@@ -112,9 +111,9 @@ export async function getDashboard(prisma: PrismaClient): Promise<DashboardData>
 // programa (código); la fecha de arranque vive en el perfil para poder reiniciar
 // el contador de semanas sin desplegar ni tocar el día del programa de 180 días.
 const ACTIVE_PHASE = {
-  number: 2,
-  name: 'Hipertrofia y Recomposición (Torso / Pierna)',
-  weeks: 12,
+  number: 3,
+  name: 'Acondicionamiento Base (3 días: A / B / C)',
+  weeks: 8,
 };
 const PHASE_DAYS = ACTIVE_PHASE.weeks * 7;
 
@@ -140,8 +139,8 @@ export async function getProgramProgress(prisma: PrismaClient) {
 
   // Entrenamientos completados en la semana calendario actual (lunes a domingo),
   // contados solo desde el arranque de la fase: el progreso del bloque empieza
-  // en cero aunque la semana en curso arranquera con días del programa anterior.
-  // El cardio del miércoles no cuenta para la meta de 4 días de fuerza.
+  // en cero aunque la semana en curso arrancara con días del programa anterior.
+  // La meta es 3 días de fuerza: lunes, miércoles y viernes.
   const today = startOfDay(new Date());
   const weekStart = addDays(today, -((today.getDay() + 6) % 7));
   const countFrom = new Date(Math.max(weekStart.getTime(), phaseStartTime));

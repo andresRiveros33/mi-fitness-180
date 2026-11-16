@@ -3,14 +3,33 @@ import { prisma } from '../index.js';
 import { getDashboard, getProgramProgress } from '../lib/progress.js';
 import { evaluateAdaptive, buildAdaptiveInput } from '../lib/adaptive.js';
 import { isRecommendedDisclaimer, toISODate } from '../lib/calculations.js';
+import { refreshStreakProgress } from '../lib/streaks.js';
 
 const router = Router();
 
 router.get('/dashboard', async (_req, res) => {
   try {
-    const dashboard = await getDashboard(prisma);
-    const progress = await getProgramProgress(prisma);
-    res.json({ ...progress, ...dashboard });
+    const [dashboard, progress, streak] = await Promise.all([
+      getDashboard(prisma),
+      getProgramProgress(prisma),
+      refreshStreakProgress(prisma),
+    ]);
+    res.json({
+      ...progress,
+      ...dashboard,
+      weekWorkoutsDone: streak.sessionsCompleted,
+      weekWorkoutsTotal: streak.sessionsTarget,
+      streak,
+    });
+  } catch (e) {
+    res.status(500).json({ error: (e as Error).message });
+  }
+});
+
+// Racha semanal estilo Duolingo: 3/3 de la semana y semanas consecutivas.
+router.get('/streak', async (_req, res) => {
+  try {
+    res.json(await refreshStreakProgress(prisma));
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }

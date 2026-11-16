@@ -13,7 +13,7 @@ type BasicIngredient = {
   fiber: number;
 };
 
-// Ejercicios del programa vigente (4 días Torso / Pierna).
+// Ejercicios del programa vigente (3 días: A / B / C).
 const programExercises = PROGRAM.flatMap((day) =>
   day.exercises.map((ex) => [ex.name, ex.category ?? 'general'] as const)
 );
@@ -25,7 +25,7 @@ const monthlyGoals = [
       'Establecer rutina diaria',
       'Registrar alimentación todos los días',
       'Proteína ≥ 145 g/día',
-      'Entrenamiento 4 días/semana',
+      'Entrenamiento 3 días/semana (A / B / C)',
       'Aumentar actividad diaria',
     ],
   },
@@ -176,6 +176,14 @@ async function main() {
     }
   }
   console.log(`✅ ${createdFoods} alimentos básicos creados (${basicFoods.length} en catálogo)`);
+
+  // 6. Progreso de rachas (singleton). Los valores se recalculan desde los
+  //    entrenamientos guardados cada vez que se consulta /api/stats/streak.
+  const streak = await prisma.streakProgress.findFirst();
+  if (!streak) {
+    await prisma.streakProgress.create({ data: {} });
+    console.log('✅ Progreso de rachas inicializado');
+  }
 
   console.log('🎉 Seed completado');
 }

@@ -14,3 +14,4 @@ backend/prisma/dev.db-journal
 .idea/
 coverage/
 backup/
+.neon

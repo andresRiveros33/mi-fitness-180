@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Save, ArrowLeft, Dumbbell, CheckCircle2, Minus, Timer, Info, ExternalLink, AlertCircle, RefreshCw, Flame, Activity, Eye, ChevronDown } from 'lucide-react';
+import { Plus, Save, ArrowLeft, Dumbbell, CheckCircle2, Minus, Timer, Info, ExternalLink, AlertCircle, RefreshCw, Flame, Activity, Eye, ChevronDown, Sparkles, Trophy, ShieldCheck } from 'lucide-react';
 import { api, todayISO } from '../lib/api';
 import { WARMUP_EXERCISES, STRETCH_EXERCISES } from '../data/workoutGuide';
 import {
@@ -13,11 +13,12 @@ import {
   removePendingOps,
   saveWorkoutDraft,
 } from '../lib/offlineStore';
-import type { Exercise } from '../types';
+import type { Exercise, StreakStatus } from '../types';
 import { Card, CardHeader } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { ExerciseTechniqueModal } from '../components/ExerciseTechniqueModal';
+import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 
 interface PlanExercise {
@@ -76,6 +77,8 @@ export default function WorkoutTodayPage() {
   const [expandedExercise, setExpandedExercise] = useState<number | null>(0);
   // Ejercicio cuya guía técnica está abierta (null = ninguna).
   const [techniqueIdx, setTechniqueIdx] = useState<number | null>(null);
+  // Estado de racha devuelto al guardar: dispara la celebración post-sesión.
+  const [completion, setCompletion] = useState<StreakStatus | null>(null);
 
   const selectedDay = searchParams.get('day');
 
@@ -317,12 +320,16 @@ export default function WorkoutTodayPage() {
       attempts: 0,
     });
     try {
-      await api.post('/workouts', payload);
+      const res = await api.post<{ streak?: StreakStatus }>('/workouts', payload);
       removePendingOp(opId);
       clearWorkoutDraft(todayISO());
-      show(existing ? 'Entrenamiento actualizado ✓' : 'Entrenamiento guardado ✓');
       setSaveError(null);
-      navigate('/entrenamiento');
+      if (res?.streak) {
+        setCompletion(res.streak);
+      } else {
+        show(existing ? 'Entrenamiento actualizado ✓' : 'Entrenamiento guardado ✓');
+        navigate('/entrenamiento');
+      }
     } catch (e) {
       // No se cierra la pantalla ni se limpian las series: quedan en pantalla
       // y en el almacenamiento local para reintentar o sincronizar después.
@@ -354,8 +361,8 @@ export default function WorkoutTodayPage() {
           <Dumbbell className="w-14 h-14 mx-auto text-slate-300 mb-3" />
           <p className="font-semibold text-lg">Hoy es día de descanso</p>
           <p className="text-sm text-slate-500 mt-1">
-            El programa entrena de lunes a viernes (Torso / Pierna). El fin de semana es de
-            descanso.
+            El programa entrena lunes, miércoles y viernes (Días A, B y C). El resto de días es
+            descanso o caminata suave.
           </p>
         </Card>
       </div>
@@ -780,6 +787,109 @@ export default function WorkoutTodayPage() {
         <p className="text-center text-xs text-emerald-600 flex items-center justify-center gap-1 pb-4">
           <CheckCircle2 className="w-3.5 h-3.5" /> Ya tenías un entrenamiento hoy; actualizarlo lo reemplazará.
         </p>
+      )}
+
+      {completion && (
+        <Modal
+          onClose={() => {
+            setCompletion(null);
+            navigate('/entrenamiento');
+          }}
+          labelledBy="session-complete-title"
+        >
+          <div className="text-center">
+            <div className="relative w-24 h-24 mx-auto mb-4">
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 blur-xl opacity-40 animate-pulse" />
+              <div className="relative w-24 h-24 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-5xl shadow-lg shadow-orange-500/30">
+                {completion.weekCompleted ? '🏆' : '🔥'}
+              </div>
+            </div>
+
+            <p className="text-xs font-bold uppercase tracking-wider text-orange-500">
+              {completion.weekCompleted
+                ? 'Semana completa'
+                : completion.currentStreak > 0
+                ? `${completion.currentStreak} semana${completion.currentStreak > 1 ? 's' : ''} de racha`
+                : 'Primer paso'}
+            </p>
+            <h2 id="session-complete-title" className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+              {completion.weekCompleted
+                ? '¡Semana perfecta!'
+                : completion.currentStreak > 1
+                ? '¡No rompas la racha!'
+                : '¡Sesión completada!'}
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {completion.sessionsCompleted}/{completion.sessionsTarget} entrenamientos esta semana
+            </p>
+
+            <div className="flex items-center justify-center gap-2 mt-5">
+              {completion.weekDays.map((day) => (
+                <div key={day.dow} className="flex flex-col items-center gap-1">
+                  <div
+                    className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-sm ${
+                      day.completed
+                        ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-md shadow-emerald-500/30'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-2 border-dashed border-slate-300 dark:border-slate-600'
+                    }`}
+                  >
+                    {day.completed ? <CheckCircle2 className="w-5 h-5" /> : day.dow === 1 ? 'L' : day.dow === 3 ? 'M' : 'V'}
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-400">
+                    {day.dow === 1 ? 'LUN' : day.dow === 3 ? 'MIÉ' : 'VIE'}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-5">
+              <div className="rounded-xl bg-orange-50 dark:bg-orange-950/30 p-2.5">
+                <Flame className="w-4 h-4 text-orange-500 mx-auto" />
+                <p className="text-lg font-black text-slate-900 dark:text-white">{completion.currentStreak}</p>
+                <p className="text-[10px] text-slate-500">Racha</p>
+              </div>
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 p-2.5">
+                <Trophy className="w-4 h-4 text-amber-500 mx-auto" />
+                <p className="text-lg font-black text-slate-900 dark:text-white">{completion.bestStreak}</p>
+                <p className="text-[10px] text-slate-500">Récord</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 p-2.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-500 mx-auto" />
+                <p className="text-lg font-black text-slate-900 dark:text-white">
+                  {completion.isInvicto ? 'Sí' : '—'}
+                </p>
+                <p className="text-[10px] text-slate-500">Invicto</p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-700 p-4 text-left text-white">
+              <div className="flex items-start gap-3">
+                <span className="text-3xl shrink-0">{completion.badge.emoji}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold">{completion.badge.title}</p>
+                  <p className="text-xs text-slate-300 leading-snug mt-0.5">{completion.badge.message}</p>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-white/10 flex items-start gap-2">
+                <Sparkles className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-bold">{completion.motivation.title}</p>
+                  <p className="text-[11px] text-slate-300 leading-snug">{completion.motivation.message}</p>
+                </div>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => {
+                setCompletion(null);
+                navigate('/entrenamiento');
+              }}
+              className="w-full mt-5 py-3.5"
+            >
+              Ver mi progreso
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

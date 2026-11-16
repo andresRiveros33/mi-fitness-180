@@ -11,6 +11,9 @@ import {
   ChevronRight,
   TrendingDown,
   TrendingUp,
+  Trophy,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { api, formatNumber } from '../lib/api';
 import type { DashboardData, AdaptiveResponse, UserProfile } from '../types';
@@ -92,6 +95,83 @@ export default function DashboardPage() {
           </div>
         </div>
       </Card>
+
+      {/* Racha semanal estilo Duolingo */}
+      {data.streak && (
+        <Card className="border-amber-200/70 dark:border-amber-900/60 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/20">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-orange-500/30">
+                <Flame className="w-7 h-7" />
+                <span className="absolute -top-1.5 -right-1.5 min-w-[1.4rem] h-[1.4rem] rounded-full bg-white dark:bg-slate-900 text-orange-600 text-[11px] font-black flex items-center justify-center border-2 border-orange-200 dark:border-orange-900">
+                  {data.streak.currentStreak}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-amber-700 dark:text-amber-300 font-semibold">
+                  Racha semanal
+                </p>
+                <p className="text-2xl font-black leading-tight text-slate-900 dark:text-white">
+                  {data.streak.sessionsCompleted}/{data.streak.sessionsTarget}
+                </p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
+                  {data.streak.currentStreak > 1
+                    ? `${data.streak.currentStreak} semanas seguidas`
+                    : data.streak.weekCompleted
+                    ? 'Semana completa'
+                    : 'Entrenamientos esta semana'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1.5 shrink-0">
+              {data.streak.isInvicto && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-1">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Invicto
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 rounded-full bg-white/80 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 text-[10px] font-semibold px-2 py-1">
+                <Trophy className="w-3 h-3 text-amber-500" /> Mejor: {data.streak.bestStreak}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            {data.streak.weekDays.map((day) => (
+              <div key={day.dow} className="flex-1">
+                <div
+                  className={`h-2 rounded-full ${
+                    day.completed
+                      ? 'bg-gradient-to-r from-emerald-400 to-emerald-600'
+                      : 'bg-amber-200/80 dark:bg-amber-900/60'
+                  }`}
+                />
+                <p
+                  className={`mt-1 text-center text-[10px] font-semibold ${
+                    day.completed ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+                  }`}
+                >
+                  {day.dow === 1 ? 'LUN' : day.dow === 3 ? 'MIÉ' : 'VIE'}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 flex items-start gap-2 rounded-xl bg-white/70 dark:bg-slate-900/50 px-3 py-2">
+            <Sparkles className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                {data.streak.motivation.title}
+              </p>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
+                {data.streak.motivation.message}
+              </p>
+            </div>
+            <span className="text-xl shrink-0" aria-hidden>
+              {data.streak.badge.emoji}
+            </span>
+          </div>
+        </Card>
+      )}
 
       {/* Weight & waist cards */}
       <div className="grid grid-cols-2 gap-3">

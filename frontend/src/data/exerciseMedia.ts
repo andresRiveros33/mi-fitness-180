@@ -13,6 +13,16 @@
 const CDN = 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
 
 const MEDIA: Record<string, string> = {
+  // Fase 3 · Acondicionamiento Base (3 días)
+  'Dominadas australianas (remo invertido)': 'Inverted_Row',
+  'Press de banca con mancuernas': 'Dumbbell_Bench_Press',
+  'Remo con mancuerna a una mano': 'One-Arm_Dumbbell_Row',
+  'Sentadilla con mancuerna o barra': 'Goblet_Squat',
+  'Sentadilla búlgara (por pierna)': 'Split_Squat_with_Dumbbells',
+  'Dominadas negativas (excéntricas)': 'Pullups',
+  'Curl de bíceps con mancuernas o barra': 'Dumbbell_Bicep_Curl',
+  'Plancha o rueda abdominal': 'Plank',
+  // Nombres anteriores (historial y compatibilidad)
   'Sentadilla libre (peso corporal)': 'Bodyweight_Squat',
   'Sentadilla Goblet con mancuerna': 'Goblet_Squat',
   'Peso muerto rumano con mancuernas o barra': 'Barbell_Deadlift',
