@@ -9,22 +9,37 @@ const router = Router();
 
 router.get('/dashboard', async (_req, res) => {
   try {
+    // La racha vive en tablas nuevas. Si aún no están sincronizadas en la base
+    // de datos, el dashboard debe seguir respondiendo con sus datos base.
     const [dashboard, progress, streak] = await Promise.all([
       getDashboard(prisma),
       getProgramProgress(prisma),
-      refreshStreakProgress(prisma),
+      safeRefreshStreak(),
     ]);
     res.json({
       ...progress,
       ...dashboard,
-      weekWorkoutsDone: streak.sessionsCompleted,
-      weekWorkoutsTotal: streak.sessionsTarget,
-      streak,
+      ...(streak
+        ? {
+            weekWorkoutsDone: streak.sessionsCompleted,
+            weekWorkoutsTotal: streak.sessionsTarget,
+            streak,
+          }
+        : {}),
     });
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
 });
+
+async function safeRefreshStreak() {
+  try {
+    return await refreshStreakProgress(prisma);
+  } catch (e) {
+    console.error('Racha semanal', (e as Error).message);
+    return null;
+  }
+}
 
 // Racha semanal estilo Duolingo: 3/3 de la semana y semanas consecutivas.
 router.get('/streak', async (_req, res) => {

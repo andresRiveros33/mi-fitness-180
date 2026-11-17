@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "db:generate": "dotenv -e ../.env.local -e ../.env -- prisma generate",
     "db:migrate": "dotenv -e ../.env.local -e ../.env -- prisma migrate dev --name init",
@@ -24,6 +24,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
+    "prisma": "^6.7.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -31,7 +32,6 @@
     "@types/express": "^5.0.3",
     "@types/node": "^24.0.0",
     "dotenv-cli": "^11.1.0",
-    "prisma": "^6.7.0",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0",
     "vitest": "^3.1.0"
